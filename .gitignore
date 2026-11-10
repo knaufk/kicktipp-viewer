@@ -1,0 +1,19 @@
+# Zugangsdaten und Konfiguration (Vorlage: .env.example)
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+
+# macOS / Editor
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code (lokale Einstellungen)
+.claude/
+
+# Generierte Daten (lokal; im Container im Volume /data)
+data/

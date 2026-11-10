@@ -1,0 +1,1188 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kicktipp Viewer</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#0f4a30">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Big+Shoulders+Display:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Rasen, Kreide, Meisterschale (Gelb = Sieg), Rote Karte (Rot = Verlust) */
+:root{
+  --turf:#0f4a30;--turf-2:#135a3b;--chalk:#f3f7f1;
+  --bg:#e9efe8;--panel:#fff;--text:#13211a;--muted:#5b6b62;--line:#d3ddd5;--line-soft:#e6ece6;
+  --accent:#17734a;--gold:#f2c230;--red:#c8102e;--hover:rgba(19,33,26,.06);
+  --p0:#eef1ee;--p2:#d3ead9;--p3:#8fcca5;--p4:#17734a;
+  --series-1:#2a78d6;--series-2:#eb6834;--series-3:#1baf7a;
+  --display:"Big Shoulders Display","Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --turf:#0b3221;--turf-2:#0e3b28;--chalk:#e8efe9;
+  --bg:#0f1913;--panel:#16231b;--text:#e6ede7;--muted:#93a499;--line:#2a3b30;--line-soft:#203027;
+  --accent:#5cc58d;--gold:#f2c230;--red:#ff6b6b;--hover:rgba(0,0,0,.18);
+  --p0:#1c2a21;--p2:#1f4330;--p3:#2c6e4a;--p4:#47b07a;
+  --series-1:#3987e5;--series-2:#d95926;--series-3:#199e70;
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--body);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1140px;margin:0 auto;padding:0 16px}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* Kopfband: Mähstreifen mit Mittelkreis */
+.pitch{position:sticky;z-index:10;color:var(--chalk);background:
+  url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 400'%3E%3Cg fill='none' stroke='%23fff' stroke-opacity='.13' stroke-width='3'%3E%3Ccircle cx='200' cy='200' r='120'/%3E%3Cpath d='M200 0v400'/%3E%3Ccircle cx='200' cy='200' r='4' fill='%23fff' fill-opacity='.13'/%3E%3C/g%3E%3C/svg%3E") right max(-80px, calc(50% - 680px)) center/auto 140% no-repeat,
+  repeating-linear-gradient(90deg,var(--turf) 0 72px,var(--turf-2) 72px 144px)}
+.top{display:grid;grid-template-columns:1fr auto;gap:24px 48px;align-items:end;padding-top:40px;padding-bottom:32px}
+h1{font:800 clamp(44px,7.5vw,84px)/.88 var(--display);margin:0;letter-spacing:-.005em;text-wrap:balance}
+.meta{margin:12px 0 0;font-size:14px;opacity:.78}
+.table-top{margin:0;padding:0;list-style:none;min-width:260px}
+#leaders .cap{font-size:13px;opacity:.7;margin-bottom:8px;display:block}
+.table-top li{display:grid;grid-template-columns:28px 1fr auto 44px;align-items:baseline;gap:12px;padding:6px 0;border-top:1px solid rgba(255,255,255,.16)}
+.table-top .pos{font:700 18px var(--display);opacity:.6}
+.table-top .nm{font:700 26px/1 var(--display)}
+.table-top .pt{font:800 30px/1 var(--display)}
+.table-top .gap{font-size:13px;opacity:.65;text-align:right}
+.table-top li:first-child .nm,.table-top li:first-child .pt{color:var(--gold)}
+
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:none;border:0;background:transparent;color:var(--chalk);opacity:.78;padding:10px 16px;border-radius:6px 6px 0 0;cursor:pointer;font:600 15px var(--body)}
+nav button:hover{opacity:1;background:rgba(255,255,255,.08)}
+nav button[aria-selected=true]{opacity:1;background:var(--bg);color:var(--text)}
+
+main{margin:32px auto 64px}
+main > :last-child,main > :last-child > :last-child{margin-bottom:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px 24px;margin-bottom:24px;overflow-x:auto}
+h2{font:700 24px/1.1 var(--display);margin:0 0 16px;letter-spacing:.005em}
+table{border-collapse:collapse;width:100%}
+th,td{padding:8px 12px;text-align:center;white-space:nowrap}
+th{font-weight:500;color:var(--muted);font-size:13px;border-bottom:1px solid var(--line);vertical-align:bottom}
+td{border-bottom:1px solid var(--line-soft)}
+tr:last-child td{border-bottom:0}
+/* Zeilen-Hover als Schleier über der Zellfarbe, damit Heatmap-Farben und die deckende erste Spalte erhalten bleiben */
+@media (hover:hover){tr:hover>td{background-image:linear-gradient(var(--hover),var(--hover))}}
+td:first-child,th:first-child{text-align:left;position:sticky;left:0;background:var(--panel);font-weight:500}
+td b{font-weight:700}
+.p0{background:var(--p0)}.p2{background:var(--p2)}.p3{background:var(--p3)}.p4{background:var(--p4);color:#fff;font-weight:600}
+td sub{font-size:10px;opacity:.75;vertical-align:baseline;margin-left:1px}
+.miss{color:var(--muted)}
+tr.bot td{font-style:italic;border-top:1px dashed var(--line)}
+tr.bot td:not(.p2,.p3,.p4,[style]){color:var(--muted)}
+tr.bot td:first-child:not(:empty)::after,tr.bot td:first-child:empty+td::after{content:'Referenz';margin-left:8px;padding:1px 6px;border:1px solid var(--line);border-radius:999px;font:600 10.5px/1.4 var(--body);font-style:normal;letter-spacing:.04em;text-transform:uppercase;vertical-align:1px}
+.who{display:inline-block;vertical-align:middle;margin-left:10px;padding:2px 10px;border-radius:999px;background:var(--accent);color:var(--panel);font:700 13px/1.5 var(--body);letter-spacing:.02em}
+.who-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:0 0 14px;padding-top:24px;border-bottom:3px solid var(--gold);padding-bottom:8px}
+.who-head h2{margin:0;font:800 40px/1 var(--display)}
+.who-head>span{color:var(--muted);font-size:14px}
+.pick{margin-left:auto;display:flex;align-items:center;gap:10px}
+.pick label{font:600 13px/1 var(--body);color:var(--muted)}
+.pick select{font-size:14px;font-weight:600;padding:6px 30px 6px 10px;border:1px solid var(--accent)}
+.row{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;color:var(--muted)}
+select{font:500 15px var(--body);padding:8px 32px 8px 12px;background:var(--panel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235b6b62' stroke-width='1.6'/%3E%3C/svg%3E") right 12px center no-repeat;color:var(--text);border:1px solid var(--line);border-radius:6px;appearance:none;cursor:pointer}
+.chart{position:relative;height:460px}
+.card-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.card-head h2{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.chip{display:inline-flex;align-items:center;gap:8px;font:500 13.5px var(--body);color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:4px;padding:4px 10px;cursor:pointer}
+.chip:hover{color:var(--text);border-color:var(--muted)}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--line)}
+.chip[aria-pressed=true]{color:var(--text);border-color:var(--c);font-weight:600}
+.chip[aria-pressed=true] i{background:var(--c)}
+.note{color:var(--muted);font-size:13.5px;max-width:72ch;margin:16px 0 0}
+h2 + .note{margin-top:-8px}
+code{font-size:.92em}
+
+.awards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(280px,100%),1fr));gap:16px;margin-bottom:24px}
+.award{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:20px 20px 16px;display:flex;flex-direction:column}
+.award h3{margin:0;font:700 21px/1.1 var(--display);display:flex;gap:10px;align-items:center}
+.award h3 .ic{font-size:22px;line-height:1}
+.award .desc{color:var(--muted);font-size:13px;line-height:1.4;margin:4px 0 12px}
+.award ol{margin:auto 0 0;padding:0;list-style:none}
+.award li{display:flex;justify-content:space-between;gap:10px;padding:4px 8px;margin:0 -8px;font-size:14.5px;border-radius:4px}
+.award li.win{font-weight:700;background:color-mix(in srgb,var(--gold) 30%,transparent)}
+.award li span:last-child{color:var(--muted);font-weight:400;text-align:right}
+.award li.win span:last-child{color:inherit;font-weight:600}
+.award.new{border-color:var(--accent)}
+.badge-new{margin-left:auto;padding:2px 7px;border-radius:999px;background:var(--accent);color:var(--panel);font:700 11px/1.4 var(--body);letter-spacing:.04em;text-transform:uppercase;white-space:nowrap}
+.note .badge-new,td .badge-new{margin-left:0;vertical-align:1px}
+.award li.prev{color:var(--muted);font-size:12.5px;padding-top:6px}
+td.txt{text-align:left}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px 16px}
+.kpi b{display:block;font:800 34px/1 var(--display)}
+.kpi span{display:block;color:var(--muted);font-size:13px;margin-top:6px;line-height:1.3}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(520px,100%),1fr));gap:24px;margin-bottom:24px}
+.grid2 .card{margin-bottom:0}
+.dist{display:flex;height:36px;border-radius:4px;overflow:hidden;gap:2px}
+.dist span{display:flex;align-items:center;justify-content:center;min-width:28px;font-weight:600;font-size:14px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:10px;color:var(--muted);font-size:13px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.devt{table-layout:fixed}.devt th:first-child{width:24%}.devt th:nth-child(4){width:36%}.devt th:last-child{width:12%}
+.dev{position:relative;width:100%;max-width:160px;height:12px;margin:0 auto}
+.dev::before{content:'';position:absolute;left:50%;top:-4px;bottom:-4px;width:1px;background:var(--muted)}
+.dev span{position:absolute;top:0;bottom:0;border-radius:2px}
+.dev .up{left:50%;background:var(--series-1)}.dev .dn{right:50%;background:var(--series-2)}
+.pos-up{color:var(--series-1);font-weight:600}.pos-dn{color:var(--series-2);font-weight:600}
+.pos-neg{color:var(--red)}.pos-pos{color:var(--accent)}
+
+/* News: Zeitungsseite pro Spieltag */
+.paper{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:24px 28px 12px;margin-bottom:24px}
+.mast{display:flex;justify-content:space-between;align-items:end;gap:12px 24px;flex-wrap:wrap;border-bottom:4px double var(--text);padding-bottom:12px;margin-bottom:24px}
+.mast h2{font:800 48px/.9 var(--display);margin:0;text-transform:uppercase;letter-spacing:.01em}
+.mast .ed{display:block;color:var(--muted);font-size:13.5px;margin-top:8px}
+.mast .ed b{color:var(--red);font-weight:600}
+.kicker{display:inline-block;padding:2px 8px;border-radius:3px;font:700 11px/1.5 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.gold .kicker{color:var(--text);background:color-mix(in srgb,var(--gold) 45%,transparent)}
+.red .kicker{color:var(--red);background:color-mix(in srgb,var(--red) 12%,transparent)}
+.lead{display:grid;grid-template-columns:auto 1fr;gap:0 24px;padding-bottom:24px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.lead .ic{font-size:64px;line-height:1;padding-top:4px}
+.lead h3{font:800 clamp(30px,4.6vw,50px)/.98 var(--display);margin:10px 0 12px;text-wrap:balance}
+.lead p{font-size:17px;line-height:1.5;margin:0;max-width:68ch}
+.stories{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:0 32px}
+.story{padding:18px 0;border-bottom:1px solid var(--line-soft)}
+.story h3{font:700 24px/1.08 var(--display);margin:8px 0 6px;text-wrap:balance}
+.story h3 .ic{margin-right:6px}
+.story p{margin:0;font-size:14.5px}
+.brief{padding:16px 0}
+.brief h4{margin:0 0 8px;font:700 13px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.brief ul{margin:0;padding:0;list-style:none;columns:2 320px;column-gap:32px}
+.brief li{break-inside:avoid;padding:4px 0;font-size:14px}
+.brief li .ic{margin-right:6px}
+/* News-Modal beim Seitenaufruf: eine Meldung nach der anderen */
+dialog.news{width:min(440px,calc(100% - 32px));max-width:none;padding:0;border:0;border-radius:8px;background:var(--panel);color:var(--text);box-shadow:0 24px 64px rgba(0,0,0,.35);overflow:hidden}
+dialog.news::backdrop{background:rgba(8,20,14,.55);backdrop-filter:blur(2px)}
+.nm-head{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 20px;color:var(--chalk);background:repeating-linear-gradient(90deg,var(--turf) 0 48px,var(--turf-2) 48px 96px)}
+.nm-head b{font:800 20px/1 var(--display);text-transform:uppercase;letter-spacing:.02em}
+.nm-head span{font-size:12.5px;opacity:.75}
+.nm-head .x{margin-left:auto;width:32px;height:32px;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:inherit;font:400 20px/1 var(--body);cursor:pointer}
+.nm-head .x:hover{background:rgba(255,255,255,.2)}
+.nm-body{padding:22px 24px 8px;min-height:210px}
+.nm-body .ic{display:block;font-size:44px;line-height:1;margin-bottom:12px}
+.nm-body h3{font:800 30px/1 var(--display);margin:10px 0 10px;text-wrap:balance}
+.nm-body p{margin:0;font-size:15px}
+.nm-body.in{animation:nm-in .22s ease-out}
+@keyframes nm-in{from{opacity:0;transform:translateX(16px)}}
+@media (prefers-reduced-motion:reduce){.nm-body.in{animation:none}}
+.nm-foot{display:flex;align-items:center;gap:12px;padding:14px 24px 18px}
+.nm-dots{display:flex;gap:5px;flex-wrap:wrap}
+.nm-dots i{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.nm-dots i.on{background:var(--accent)}
+.nm-foot .all{border:0;background:none;padding:0;color:var(--muted);font:500 13px var(--body);text-decoration:underline;cursor:pointer;white-space:nowrap}
+.nm-foot .go{margin-left:auto;font:600 14.5px var(--body);padding:9px 16px;border-radius:6px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:var(--panel);white-space:nowrap}
+
+@media (max-width:720px){
+  .top{grid-template-columns:1fr;gap:16px;padding-top:24px;padding-bottom:20px}
+  h1{font-size:40px}
+  .meta{margin-top:8px;font-size:13px}
+  .table-top{min-width:0}
+  .table-top li{grid-template-columns:20px 1fr auto 36px;padding:4px 0}
+  .table-top .pos{font-size:16px}
+  .table-top .nm{font-size:21px}
+  .table-top .pt{font-size:22px}
+  nav{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 32px),transparent)}
+  nav button{padding:10px 12px;font-size:14.5px}
+  h2{font-size:22px}
+  td:first-child,th:first-child{box-shadow:inset -1px 0 var(--line)}
+  td:first-child{white-space:normal;max-width:9.5em}
+  table.stack tr:first-child{display:none}
+  table.stack,table.stack tbody,table.stack tr,table.stack td{display:block}
+  table.stack tr{padding:10px 0;border-bottom:1px solid var(--line-soft)}
+  table.stack tr:last-child{border-bottom:0}
+  table.stack td{position:static;border:0;padding:1px 0;text-align:left;white-space:normal;max-width:none;min-width:0;box-shadow:none;background:none}
+  table.stack td:first-child{font-weight:700}
+  table.stack td:empty{display:none}
+  table.stack td:not(:first-child)::before{content:attr(data-l) ": ";color:var(--muted)}
+  td.txt{white-space:normal;min-width:13em}
+  main{margin-top:24px}
+  .card{padding:16px;margin-bottom:16px}
+  .awards{gap:12px;margin-bottom:16px}
+  .kpis{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px}
+  .kpi{padding:12px}
+  .kpi b{font-size:28px}
+  .grid2{gap:16px;margin-bottom:16px}
+  .award{padding:16px}
+  .paper{padding:16px 16px 4px;margin-bottom:16px}
+  .mast h2{font-size:38px}
+  .lead{grid-template-columns:1fr}
+  .lead .ic{font-size:44px}
+  .lead p{font-size:16px}
+  .chart{height:360px}
+  .chips{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px 12px;padding:0 16px;scrollbar-width:none}
+  .chip{flex:none}
+  th,td{padding:6px 8px}
+}
+</style>
+</head>
+<body>
+<header class="pitch">
+  <div class="wrap top">
+    <div><h1 id="title">Tipprunde</h1><p class="meta" id="meta"></p></div>
+    <div id="leaders"></div>
+  </div>
+  <nav id="tabs" class="wrap" role="tablist"></nav>
+</header>
+<main id="view" class="wrap"></main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const sign = ([h, a]) => Math.sign(h - a);
+const $ = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };
+// Tabelle, die mobil als gestapelte Einträge erscheint: Spaltenkopf wird zum Zellen-Label
+const stack = t => {
+  const head = [...t.rows[0].cells].map(c => c.textContent);
+  [...t.rows].slice(1).forEach(r => [...r.cells].forEach((c, i) => c.dataset.l = head[i]));
+  t.classList.add('stack'); return t;
+};
+const pcls = p => p == null ? '' : p >= 4 ? 'p4' : p === 3 ? 'p3' : p >= 1 ? 'p2' : 'p0';
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+// Gängige Vereinskürzel; unbekannte Teams fallen auf die ersten drei Buchstaben zurück
+const TEAM_ABBR = {
+  '1. FC Köln': 'KOE', '1. FC Union Berlin': 'FCU', '1899 Hoffenheim': 'TSG', 'Bayer 04 Leverkusen': 'B04',
+  'Bor. Mönchengladbach': 'BMG', 'Borussia Dortmund': 'BVB', 'Eintracht Frankfurt': 'SGE', 'FC Augsburg': 'FCA',
+  'FC Bayern München': 'FCB', 'FC Schalke 04': 'S04', 'FSV Mainz 05': 'M05', 'Hamburger SV': 'HSV',
+  'RB Leipzig': 'RBL', 'SC Freiburg': 'SCF', 'SC Paderborn 07': 'SCP', 'SV Elversberg': 'SVE',
+  'VfB Stuttgart': 'VFB', 'Werder Bremen': 'SVW', 'VfL Wolfsburg': 'WOB', 'FC St. Pauli': 'STP',
+  '1. FC Heidenheim 1846': 'FCH', 'VfL Bochum': 'BOC', 'Holstein Kiel': 'KSV', 'SV Darmstadt 98': 'D98',
+};
+const abbr = team => TEAM_ABBR[team] ?? team.slice(0, 3).toUpperCase();
+
+// Hervorgehobene Spieler (max. 3, Farbe bleibt am Spieler); alle anderen grau
+const FOCUS_MAX = 3;
+let focus = new Map();                                             // Spieler-ID -> Farbslot 1..3
+function initFocus(sorted) {
+  try { focus = new Map(JSON.parse(localStorage.getItem('focus'))); } catch {}
+  focus.forEach((_, id) => byPlayer.has(id) || focus.delete(id));
+  if (!focus.size) sorted.slice(0, FOCUS_MAX).forEach((p, i) => focus.set(p.id, i + 1));
+}
+function toggleFocus(id) {
+  if (focus.has(id)) focus.delete(id);
+  else {
+    if (focus.size >= FOCUS_MAX) focus.delete(focus.keys().next().value);  // ältesten verdrängen
+    const used = new Set(focus.values());
+    focus.set(id, [1, 2, 3].find(s => !used.has(s)));
+  }
+  try { localStorage.setItem('focus', JSON.stringify([...focus])); } catch {}
+}
+
+// Namen am Linienende der hervorgehobenen Spieler, Überlappungen auseinanderschieben
+const endLabels = { id: 'endLabels', afterDatasetsDraw(chart) {
+  const { ctx, chartArea } = chart, items = [];
+  chart.data.datasets.forEach((ds, i) => {
+    if (!ds.focus) return;
+    const pts = chart.getDatasetMeta(i).data, last = pts.at(-1);
+    if (last) items.push({ y: last.y, x: last.x, text: ds.label, color: ds.borderColor });
+  });
+  items.sort((a, b) => a.y - b.y).forEach((it, i, a) => { if (i && it.y - a[i - 1].y < 16) it.y = a[i - 1].y + 16; });
+  ctx.save(); ctx.font = `600 13px ${cssv('--body')}`; ctx.textBaseline = 'middle';
+  items.forEach(it => { ctx.fillStyle = cssv('--text'); ctx.fillText(it.text, it.x + 10, Math.min(it.y, chartArea.bottom)); });
+  ctx.restore();
+} };
+
+// Linienchart mit Spielerauswahl. series: [{ id, name, data }]; ref: { name, data } als gestrichelte Referenzlinie
+function lineChart({ labels, series, ref, yTitle, reverse, min, max, fmt = v => v, sortAsc }) {
+  const box = $('div'), chips = $('div', 'chips'), wrap = $('div', 'chart'), cv = $('canvas');
+  chips.setAttribute('aria-label', 'Spieler hervorheben (bis zu drei)');
+  wrap.append(cv); box.append(chips, wrap);
+  let chart;
+  const color = id => cssv('--series-' + focus.get(id));
+  const build = () => {
+    const grey = cssv('--muted') + '55';
+    chips.replaceChildren(...series.map(s => {
+      const b = $('button', 'chip', `<i></i>${s.name}`);
+      b.setAttribute('aria-pressed', focus.has(s.id));
+      if (focus.has(s.id)) b.style.setProperty('--c', color(s.id));
+      b.onclick = () => { toggleFocus(s.id); build(); };
+      return b;
+    }));
+    const ds = series.map(s => {
+      const f = focus.has(s.id), c = f ? color(s.id) : grey;
+      return { label: s.name, data: s.data, focus: f, order: f ? 0 : 1, borderColor: c, backgroundColor: c,
+        borderWidth: f ? 2.5 : 1.5, pointRadius: f ? 3 : 0, pointHoverRadius: 5, pointHoverBackgroundColor: f ? c : cssv('--text'),
+        tension: .25, cubicInterpolationMode: 'monotone' };
+    });
+    if (ref) { const c = cssv('--text'); ds.push({ label: ref.name, data: ref.data, focus: true, order: 0, borderColor: c, backgroundColor: c, borderWidth: 2, borderDash: [6, 4],
+      pointRadius: 0, pointHoverRadius: 4, tension: .25, cubicInterpolationMode: 'monotone' }); }
+    if (chart) { chart.data.datasets = ds; chart.update('none'); return; }
+    chart = new Chart(cv, { type: 'line', plugins: [endLabels],
+      data: { labels, datasets: ds },
+      options: { responsive: true, maintainAspectRatio: false, animation: false,
+        layout: { padding: { right: innerWidth < 720 ? 72 : 96, top: 8 } },
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false },
+          tooltip: { itemSort: (a, b) => sortAsc ? a.parsed.y - b.parsed.y : b.parsed.y - a.parsed.y,
+            callbacks: { title: it => it[0].label.replace('.', '. Spieltag'), label: it => ` ${it.dataset.label}: ${fmt(it.parsed.y)}` },
+            boxWidth: 8, boxHeight: 8, usePointStyle: true } },
+        scales: { y: { reverse, min, max, title: { display: true, text: yTitle }, ticks: { precision: 0, stepSize: reverse ? 1 : undefined },
+            grid: { color: c => c.tick?.value === 0 && !reverse ? cssv('--muted') : cssv('--line-soft') } },
+          x: { title: { display: true, text: 'Spieltag' }, grid: { display: false } } } } });
+  };
+  setTimeout(build);
+  return box;
+}
+
+let D, byMatch, byPlayer, tipOf, finished, days, playedDays, botTips;
+
+// Kicktipp-Wertung: 4 exakt, 3 richtige Tordifferenz (außer Remis), 2 richtige Tendenz
+const pointsFor = (tip, res) => tip[0] === res[0] && tip[1] === res[1] ? 4 : sign(tip) !== sign(res) ? 0 : sign(tip) && tip[0] - tip[1] === res[0] - res[1] ? 3 : 2;
+// Quotenbot als Referenz (kein Spieler, zählt nirgends mit): tippt den Favoriten mit 2:1, 1:1 bzw. 1:2
+const BOT = 'Quotenbot';
+function quotenbot() {
+  const tips = new Map();
+  for (const m of D.matches) {
+    if (!m.odds) continue;
+    const { h, d, a } = m.odds, min = Math.min(h, d, a);
+    const tip = h === min ? [2, 1] : a === min ? [1, 2] : [1, 1];      // gleiche Quote: Heim vor Gast vor Remis
+    tips.set(m.id, { tip, points: m.result ? pointsFor(tip, m.result) : null });
+  }
+  return tips;
+}
+
+function prepare(d) {
+  D = d;
+  byMatch = new Map(d.matches.map(m => [m.id, m]));
+  byPlayer = new Map(d.players.map(p => [p.id, p]));
+  tipOf = new Map(d.tips.map(t => [t.player + ':' + t.match, t]));
+  finished = d.matches.filter(m => m.result);
+  days = [...new Set(d.matches.map(m => m.matchday))];
+  playedDays = [...new Set(finished.map(m => m.matchday))];
+  botTips = quotenbot();
+}
+
+// Punkte je Spieler und Spieltag, kumuliert, Tagessiege, Rang (bei Punktgleichheit entscheiden die Tagessiege)
+function standings() {
+  const per = new Map(D.players.map(p => [p.id, playedDays.map(() => 0)]));
+  for (const t of D.tips) {
+    const m = byMatch.get(t.match), i = playedDays.indexOf(m.matchday);
+    if (i >= 0 && t.points) per.get(t.player)[i] += t.points;
+  }
+  const sum = a => a.reduce((acc, v, i) => (acc.push((acc[i - 1] || 0) + v), acc), []);
+  const cum = new Map([...per].map(([id, a]) => [id, sum(a)]));
+  // Tagessieg: höchste Punktzahl des Spieltags (> 0), bei Gleichstand zählen alle
+  const top = playedDays.map((_, i) => Math.max(...[...per.values()].map(a => a[i])));
+  const wins = new Map([...per].map(([id, a]) => [id, sum(a.map((v, i) => +(v > 0 && v === top[i])))]));
+  // Vergleich nach Spieltag i (Standard: aktueller Stand): Punkte, dann Tagessiege
+  const cmp = (i = -1) => (a, b) => (cum.get(b.id).at(i) ?? 0) - (cum.get(a.id).at(i) ?? 0) || (wins.get(b.id).at(i) ?? 0) - (wins.get(a.id).at(i) ?? 0);
+  const order = i => [...D.players].sort(cmp(i));
+  const rank = new Map(D.players.map(p => [p.id, []]));
+  playedDays.forEach((_, i) => order(i).forEach((p, r) => rank.get(p.id).push(r + 1)));
+  return { per, cum, wins, rank, cmp, order };
+}
+
+// News zum Spieltag d: Meldungen mit Relevanz (score), wichtigste zuerst
+function news(d, sc) {
+  const i = playedDays.indexOf(d), P = D.players.map(p => p.id), N = P.length, out = [];
+  const add = (score, kicker, icon, head, text, tone = '') => out.push({ score, kicker, icon, head, text, tone });
+  const n = id => byPlayer.get(id).name, b = id => `<b>${n(id)}</b>`;
+  const and = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' und ' + a.at(-1) : a[0];
+  const pl = (k, s = 'Punkt', p = 'Punkte') => `${k} ${k === 1 ? s : p}`;
+  const pld = k => pl(k, 'Punkt', 'Punkten');                       // Dativ: „mit 16 Punkten“
+  const q2 = q => q.toFixed(2).replace('.', ',');
+  // Formulierung je Spieltag variieren, aber stabil halten
+  let seed = d * 7;
+  const pick = a => a[seed++ % a.length];
+  const ms = finished.filter(m => m.matchday === d);
+  const done = ms.length === D.matches.filter(m => m.matchday === d).length;
+  const pts = id => sc.per.get(id)[i], rk = id => sc.rank.get(id)[i], rkPrev = id => sc.rank.get(id)[i - 1];
+  const cumAt = (id, j) => sc.cum.get(id)[j];
+  const at = (r, j = i) => P.find(id => sc.rank.get(id)[j] === r);
+  const res = m => m.result.join(':');
+  const outcome = m => [`den Auswärtssieg von ${m.away}`, 'das Remis', `den Heimsieg von ${m.home}`][sign(m.result) + 1];
+  const believer = m => ['an ' + m.away, 'an das Remis', 'an ' + m.home][sign(m.result) + 1];
+  const qOf = m => m.odds?.['hda'[1 - sign(m.result)]];
+  const tippedBefore = id => D.tips.some(t => t.player === id && byMatch.get(t.match).matchday < d);
+  const used = new Set();                                            // Spieler:Spiel, über die schon berichtet wurde
+
+  // Spieltagssieg (Rekord, Serie)
+  const order = [...P].sort((a, c) => pts(c) - pts(a)), top = pts(order[0]);
+  const winners = P.filter(id => pts(id) === top), runner = order.find(id => pts(id) < top);
+  const exactN = id => ms.filter(m => tipOf.get(id + ':' + m.id)?.points === 4).length;
+  const best = i ? Math.max(...P.flatMap(id => sc.per.get(id).slice(0, i))) : Infinity;
+  if (top > 0) {
+    const rec = top > best, one = winners.length === 1, w = winners[0];
+    const head = !done ? `${and(winners.map(n))} ${one ? 'führt' : 'führen'} den ${d}. Spieltag an`
+      : one ? pick([`${n(w)} gewinnt den ${d}. Spieltag`, `Tagessieg für ${n(w)}`, `${n(w)} ist König des ${d}. Spieltags`])
+      : `Geteilter Tagessieg am ${d}. Spieltag`;
+    const ex = one && exactN(w) ? ` (davon ${pl(exactN(w), 'Volltreffer', 'Volltreffer')})` : '';
+    add(75 + (rec ? 25 : 0), rec ? 'Rekord' : 'Spieltag', rec ? '🔥' : '🏆', rec && done ? `Saisonrekord! ${head}` : head,
+      `${and(winners.map(b))} ${one ? 'holt' : 'holen'} ${pl(top)}${ex}.` +
+      (runner ? ` Dahinter: ${and(P.filter(id => pts(id) === pts(runner)).map(b))} mit ${pts(runner)}.` : '') +
+      (rec ? ` Die bisherige Bestmarke der Saison lag bei ${best}.` : ''), 'gold');
+    // Tagessiege in Folge
+    if (done) for (const id of winners) {
+      let k = 0;
+      for (let j = i; j >= 0; j--) { const t = Math.max(...P.map(x => sc.per.get(x)[j])); if (t > 0 && sc.per.get(id)[j] === t) k++; else break; }
+      if (k >= 2) add(55 + 5 * k, 'Serie', '⚡', `${n(id)} gewinnt ${k} Spieltage in Folge`, `Seit dem ${d - k + 1}. Spieltag kommt an ${b(id)} niemand vorbei.`, 'gold');
+    }
+  }
+
+  // Tabellenspitze
+  const lead = at(1), second = at(2), gap = cumAt(lead, i) - cumAt(second, i);
+  const gapTxt = gap ? `${pl(gap)} vor ${b(second)}` : `punktgleich mit ${b(second)} – die Tagessiege geben den Ausschlag`;
+  if (!i) add(50, 'Tabelle', '👑', `${n(lead)} ist erster Tabellenführer der Saison`, `Nach dem Auftakt steht ${b(lead)} mit ${pld(cumAt(lead, i))} oben, ${gapTxt}.`, 'gold');
+  else if (rkPrev(lead) !== 1) {
+    const old = at(1, i - 1);
+    add(100, 'Tabelle', '👑', pick([`Machtwechsel: ${n(lead)} übernimmt die Spitze`, `${n(lead)} stürzt ${n(old)} vom Thron`, `Neuer Tabellenführer: ${n(lead)}`]),
+      `Nach dem ${d}. Spieltag steht ${b(lead)} mit ${pld(cumAt(lead, i))} ganz oben, ${gapTxt}. ${b(old)} rutscht auf Platz ${rk(old)}.`, 'gold');
+  } else {
+    const prevGap = cumAt(lead, i - 1) - cumAt(at(2, i - 1), i - 1);
+    if (gap <= 2) add(60, 'Tabelle', '😰', pick([`Es wird eng für ${n(lead)}`, `${n(second)} sitzt ${n(lead)} im Nacken`]),
+      `${b(lead)} ist zwar weiter Erster, aber ${gap ? 'nur noch ' + pl(gap) + ' vor' : 'punktgleich mit'} ${b(second)}. Vor dem Spieltag betrug der Vorsprung noch ${pl(prevGap)}.`);
+    else if (gap > prevGap) add(45, 'Tabelle', '👑', `${n(lead)} baut die Führung aus`, `Der Vorsprung an der Spitze wächst von ${prevGap} auf ${pl(gap)}. Erster Verfolger: ${b(second)}.`);
+    else add(35, 'Tabelle', '👑', `${n(lead)} bleibt vorn`, `Mit ${pld(cumAt(lead, i))} weiter Platz 1, ${gapTxt}.`);
+  }
+
+  // Auf- und Absteiger, Rote Laterne
+  if (i) {
+    const moves = P.map(id => ({ id, dv: rkPrev(id) - rk(id) }));
+    const up = moves.reduce((a, c) => c.dv > a.dv ? c : a), dn = moves.reduce((a, c) => c.dv < a.dv ? c : a);
+    if (up.dv >= 2) add(38 + 4 * up.dv, 'Tabelle', '🚀', pick([`${n(up.id)} klettert auf Platz ${rk(up.id)}`, `Aufwind für ${n(up.id)}: ${up.dv} Plätze nach oben`]),
+      `Mit ${pld(pts(up.id))} am Spieltag geht es für ${b(up.id)} von Platz ${rkPrev(up.id)} auf ${rk(up.id)}.`);
+    if (dn.dv <= -2) add(36 - 4 * dn.dv, 'Tabelle', '📉', pick([`${n(dn.id)} rutscht ab`, `Absturz: ${n(dn.id)} verliert ${-dn.dv} Plätze`]),
+      `Nur ${pl(pts(dn.id))} – ${b(dn.id)} fällt von Platz ${rkPrev(dn.id)} auf ${rk(dn.id)}.`, 'red');
+    const last = at(N), prevLast = at(N, i - 1);
+    if (last !== prevLast) add(42, 'Tabelle', '🏮', `${n(last)} übernimmt die Rote Laterne`, `${b(prevLast)} gibt den letzten Platz ab und ist jetzt ${rk(prevLast)}.`, 'red');
+    else {
+      let k = 0; for (let j = i; j >= 0 && sc.rank.get(last)[j] === N; j--) k++;
+      if (k >= 3) add(22, 'Tabelle', '🏮', `${n(last)} seit ${k} Spieltagen Letzter`, `Die Rote Laterne bleibt bei ${b(last)}, Rückstand auf Platz ${N - 1}: ${pl(cumAt(at(N - 1), i) - cumAt(last, i))}.`, 'red');
+    }
+  }
+
+  // Spiele: Totalausfall, einzig richtiger Tipp, einziger Volltreffer
+  for (const m of ms) {
+    const ts = P.map(id => tipOf.get(id + ':' + m.id)).filter(Boolean);
+    const hit = ts.filter(t => t.points > 0), exact = ts.filter(t => t.points === 4), q = qOf(m);
+    const bonus = q ? Math.min(q, 8) * 2 : 0, qt = q ? ` (Quote ${q2(q)})` : '';
+    if (ts.length && !hit.length) {
+      const bot = botTips.get(m.id);
+      add(50 + bonus, 'Spiel', '🤯', pick([`Keiner hat's kommen sehen: ${m.home} – ${m.away} ${res(m)}`, `Totalausfall bei ${m.home} – ${m.away}`]),
+        `Niemand in der Runde hatte ${outcome(m)} auf dem Zettel${qt}.` + (bot ? bot.points ? ` Nur der ${BOT} lag richtig.` : ` Auch der ${BOT} nicht.` : ''), 'red');
+    } else if (hit.length === 1) {
+      const t = hit[0]; used.add(t.player + ':' + m.id);
+      add(56 + bonus, 'Spiel', '🕵️', `Nur ${n(t.player)} glaubte ${believer(m)}`,
+        `${m.home} – ${m.away} endet ${res(m)}${qt}. ${b(t.player)} tippte ${t.tip.join(':')} und kassiert ${pl(t.points)} – alle anderen lagen daneben.`, 'gold');
+    } else if (exact.length === 1) {
+      const t = exact[0]; used.add(t.player + ':' + m.id);
+      add(44, 'Volltreffer', '🎯', `${n(t.player)} trifft das ${res(m)} exakt`, `Bei ${m.home} – ${m.away} hatte sonst niemand das genaue Ergebnis.`);
+    }
+    if (m.result[0] + m.result[1] >= 6) {
+      const dist = t => Math.abs(t.tip[0] - m.result[0]) + Math.abs(t.tip[1] - m.result[1]);
+      const close = Math.min(...ts.map(dist)), who = ts.filter(t => dist(t) === close);
+      add(26, 'Spiel', '🎆', `Torfestival: ${m.home} – ${m.away} ${res(m)}`, `${m.result[0] + m.result[1]} Tore. Am nächsten dran: ${and(who.map(t => `${b(t.player)} (${t.tip.join(':')})`))}.`);
+    }
+  }
+
+  // Außenseiter-Coup: Punkte bei der höchsten Quote auf den getippten Ausgang
+  const coups = D.tips.filter(t => t.points > 0 && !used.has(t.player + ':' + t.match)).map(t => ({ t, m: byMatch.get(t.match) }))
+    .filter(x => x.m.matchday === d && x.m.odds).map(x => ({ ...x, q: x.m.odds['hda'[1 - sign(x.t.tip)]] })).sort((a, c) => c.q - a.q);
+  if (coups[0]?.q >= 3.5) {
+    const { t, m, q } = coups[0], also = coups.filter(x => x.m === m && x.t !== t).length;
+    add(36 + 2 * q, 'Quoten', '🐺', pick([`Außenseiter-Riecher: ${n(t.player)}`, `${n(t.player)} gewinnt gegen die Quote`]),
+      `${b(t.player)} setzte bei ${m.home} – ${m.away} auf ${outcome(m)} – Quote ${q2(q)}.` + (also ? ` Mit im Boot: ${also} weitere.` : ''));
+  }
+
+  // Schlechtester Tag (nur abgeschlossene Spieltage, nur wer getippt hat)
+  if (done) {
+    const tipped = P.filter(id => ms.some(m => tipOf.has(id + ':' + m.id)));
+    const low = Math.min(...tipped.map(pts)), who = tipped.filter(id => pts(id) === low);
+    if (who.length <= 2) add(low ? 28 : 48, 'Spieltag', '🥶', low ? pick([`Gebrauchter Tag für ${and(who.map(n))}`, `${and(who.map(n))} ${who.length > 1 ? 'erwischen' : 'erwischt'} einen rabenschwarzen Spieltag`]) : `Nullnummer für ${and(who.map(n))}`,
+      `${low ? 'Nur ' + pl(low) : 'Kein einziger Punkt'} am ${d}. Spieltag – Tageswertung ganz hinten.`, 'red');
+  }
+
+  // Quotenbot als Messlatte
+  const withOdds = ms.filter(m => botTips.has(m.id));
+  if (done && withOdds.length) {
+    const bp = withOdds.reduce((s, m) => s + botTips.get(m.id).points, 0), beat = P.filter(id => pts(id) > bp);
+    if (!beat.length) add(52, BOT, '🤖', `Der ${BOT} schlägt die komplette Runde`, `Stur auf den Favoriten getippt, ${pl(bp)} geholt – kein Mensch war besser.`, 'red');
+    else if (beat.length <= 3) add(46, BOT, '🤖', `Nur ${and(beat.map(n))} ${beat.length > 1 ? 'schlagen' : 'schlägt'} den ${BOT}`, `Der ${BOT} holt ${pl(bp)}, der Rest der Runde liegt dahinter.`);
+    else if (beat.length === N) add(38, BOT, '🤖', `Alle schlagen den ${BOT}`, `Mit ${pld(bp)} landet der Favoriten-Tipper hinter jedem in der Runde.`, 'gold');
+    else add(18, BOT, '🤖', `${BOT} holt ${pl(bp)}`, `${beat.length} von ${N} Tippern waren besser.`);
+  }
+
+  // Vergessene Tipps
+  for (const id of P) {
+    const miss = ms.filter(m => !tipOf.has(id + ':' + m.id)).length;
+    if (miss && tippedBefore(id)) add(20 + 3 * miss, 'Kurios', '😴', `${n(id)} vergisst ${miss === ms.length ? 'den ganzen Spieltag' : pl(miss, 'Tipp', 'Tipps')}`,
+      `${miss === ms.length ? 'Kein einziger Tipp' : pl(miss, 'Spiel', 'Spiele') + ' ohne Tipp'} von ${b(id)} – das kostet.`, 'red');
+  }
+
+  // Identische Tipps auf dem ganzen Spieltag
+  if (ms.length >= 5) for (let a = 0; a < N; a++) for (let c = a + 1; c < N; c++) {
+    const same = ms.every(m => { const x = tipOf.get(P[a] + ':' + m.id), y = tipOf.get(P[c] + ':' + m.id); return x && y && x.tip.join() === y.tip.join(); });
+    if (same) add(34, 'Kurios', '👯', `Abgeschrieben? ${n(P[a])} und ${n(P[c])} tippen identisch`, `Alle ${ms.length} Spiele mit exakt demselben Ergebnis.`);
+  }
+
+  // Formkurve: meiste Punkte aus den letzten drei Spieltagen
+  if (i >= 2 && done) {
+    const f = id => sc.per.get(id).slice(i - 2, i + 1).reduce((s, v) => s + v, 0), hot = [...P].sort((a, c) => f(c) - f(a))[0];
+    add(24, 'Form', '📈', `${n(hot)} ist die Form der Stunde`, `${pl(f(hot))} aus den letzten drei Spieltagen – mehr hat niemand.`);
+  }
+
+  // Vom letzten Platz zum Tagessieg
+  if (done && i && top > 0) for (const id of winners)
+    if (rkPrev(id) === N) add(68, 'Spieltag', '🦸', `Vom Tabellenende zum Tagessieg: ${n(id)}`, `Als Letzter in den Spieltag gestartet, mit ${pld(top)} als Bester raus. ${rk(id) === N ? 'Die Rote Laterne bleibt trotzdem – vorerst.' : `Jetzt Platz ${rk(id)}.`}`, 'gold');
+
+  // Rundenrekord und Rundentief: Punkte aller Spieler zusammen
+  const roundPts = j => P.reduce((s, id) => s + sc.per.get(id)[j], 0);
+  const doneIdx = playedDays.map((dd, j) => j).filter(j => j < i && finished.filter(m => m.matchday === playedDays[j]).length === D.matches.filter(m => m.matchday === playedDays[j]).length);
+  if (done && doneIdx.length) {
+    const r = roundPts(i), hi = Math.max(...doneIdx.map(roundPts)), lo = Math.min(...doneIdx.map(roundPts)), avg = (r / N).toFixed(1).replace('.', ',');
+    if (r > hi) add(48, 'Runde', '🎉', `Punkteregen: bester Spieltag der Runde`, `Zusammen ${pl(r)}, im Schnitt ${avg} pro Kopf – so viel gab es in dieser Saison noch nie. Bisheriger Bestwert: ${hi}.`, 'gold');
+    if (r < lo) add(48, 'Runde', '🌧️', `Flaute: schwächster Spieltag der Runde`, `Nur ${pl(r)} für alle zusammen, im Schnitt ${avg} pro Kopf. Bisheriger Tiefstwert: ${lo}.`, 'red');
+  }
+
+  // Abstand Erster–Letzter auf Saisonhöchstwert (ab 40 Punkten)
+  if (i) {
+    const spread = j => cumAt(at(1, j), j) - cumAt(at(N, j), j), s = spread(i);
+    if (s >= 40 && playedDays.slice(0, i).every((_, j) => spread(j) < s))
+      add(30, 'Tabelle', '📏', `Die Schere geht auf: ${s} Punkte zwischen Erstem und Letztem`, `So weit lagen ${b(at(1))} und ${b(at(N))} – und damit die ganze Runde – noch nie auseinander.`);
+  }
+
+  // Quotenbot in der virtuellen Gesamttabelle (Platz wie im Tabellenverlauf)
+  const botCum = j => finished.filter(m => playedDays.indexOf(m.matchday) <= j).reduce((s, m) => s + (botTips.get(m.id)?.points || 0), 0);
+  const botRank = j => 1 + P.filter(id => cumAt(id, j) >= botCum(j)).length;
+  if (i && done) {
+    const br = botRank(i), prev = botRank(i - 1);
+    if (br === 1 && prev > 1) add(64, BOT, '🤖', `Der ${BOT} wäre Tabellenführer`, `Mit ${pld(botCum(i))} läge der sture Favoriten-Tipper vor allen – ${b(lead)} hat ${pl(cumAt(lead, i))}.`, 'red');
+    else if (br <= 3 && prev > 3) add(44, BOT, '🤖', `Der ${BOT} klettert aufs virtuelle Podium`, `Mit ${pld(botCum(i))} läge er jetzt auf Platz ${br} der Gesamtwertung – ganz ohne nachzudenken.`);
+  }
+
+  // Spiele: sichere Bank geplatzt, kollektiver Volltreffer
+  for (const m of ms) {
+    const ts = P.map(id => tipOf.get(id + ':' + m.id)).filter(Boolean), o = m.odds;
+    const fav = o && Math.min(o.h, o.d, o.a), favSign = o && (o.h === fav ? 1 : o.a === fav ? -1 : 0);
+    if (o && fav <= 1.25 && sign(m.result) !== favSign) {
+      const on = ts.filter(t => sign(t.tip) === favSign).length;
+      add(46, 'Spiel', '🏦', `Sichere Bank geplatzt: ${m.home} – ${m.away} ${res(m)}`,
+        `Quote ${q2(fav)} auf ${favSign === 1 ? m.home : m.away} – und trotzdem kein Sieg. ${on} von ${ts.length} Tippern hatten auf den Favoriten gesetzt.`, 'red');
+    }
+    const ex = ts.filter(t => t.points === 4);
+    if (ex.length >= 7) add(40, 'Volltreffer', '🎯', `Kollektiver Volltreffer: ${ex.length} Tipper treffen das ${res(m)}`,
+      `Bei ${m.home} – ${m.away} lagen ${ex.length} von ${ts.length} exakt richtig. Nicht dabei: ${and(ts.filter(t => t.points < 4).map(t => b(t.player))) || 'niemand'}.`);
+  }
+
+  // Ausreißer-Tipps: Torflut (ab 8 Toren) und Remis-Festival (ab 5 Remis an einem Spieltag)
+  for (const id of P) {
+    const ts = ms.map(m => ({ m, t: tipOf.get(id + ':' + m.id) })).filter(x => x.t);
+    const wild = ts.filter(x => x.t.tip[0] + x.t.tip[1] >= 8).sort((a, c) => c.t.tip[0] + c.t.tip[1] - a.t.tip[0] - a.t.tip[1])[0];
+    if (wild) add(38, 'Kurios', '🌊', `Torflut-Alarm: ${n(id)} tippt ${wild.t.tip.join(':')}`,
+      `So viele Tore traute ${b(id)} ${wild.m.home} – ${wild.m.away} zu. Am Ende stand es ${res(wild.m)}, macht ${pl(wild.t.points)}.`);
+    const draws = ts.filter(x => sign(x.t.tip) === 0);
+    if (draws.length >= 5) add(36, 'Kurios', '🕊️', `Remis-Festival bei ${n(id)}`,
+      `${draws.length} von ${ts.length} Spielen hat ${b(id)} unentschieden getippt. Tatsächlich endeten ${draws.filter(x => sign(x.m.result) === 0).length} davon remis.`);
+  }
+
+  // Gleichartige Meldungen abwerten, damit nicht drei „Totalausfälle“ die Seite füllen
+  const seen = {};
+  out.sort((a, c) => c.score - a.score).forEach(s => s.score -= 15 * (seen[s.icon] = (seen[s.icon] ?? -1) + 1));
+  return { done, played: ms.length, total: D.matches.filter(m => m.matchday === d).length, items: out.sort((a, c) => c.score - a.score) };
+}
+
+// Zeitungsseite mit Spieltagsauswahl (Tab „News“ und Modal beim Seitenaufruf)
+function newsPaper() {
+  const sc = standings(), paper = $('div', 'paper'), mast = $('div', 'mast'), title = $('div'), body = $('div');
+  const sel = $('select', null, [...playedDays].reverse().map(d => `<option value="${d}">${d}. Spieltag</option>`).join(''));
+  sel.setAttribute('aria-label', 'Spieltag');
+  mast.append(title, sel); paper.append(mast, body);
+  const fmtDay = s => new Date(s).toLocaleDateString('de-DE', { day: 'numeric', month: 'long' });
+  const story = (s, cls) => `<div class="${cls} ${s.tone}"><span class="kicker">${s.kicker}</span>`;
+  const draw = () => {
+    const d = +sel.value, { done, played, total, items } = news(d, sc);
+    const ko = D.matches.filter(m => m.matchday === d).map(m => m.kickoff).sort();
+    title.innerHTML = `<h2>Tipp-Rundschau</h2><span class="ed">Ausgabe zum ${d}. Spieltag · ${fmtDay(ko[0])} – ${fmtDay(ko.at(-1))}` +
+      (done ? '' : ` · <b>vorläufig, ${played} von ${total} Spielen gespielt</b>`) + '</span>';
+    const [lead, ...rest] = items, main = rest.slice(0, 6), brief = rest.slice(6);
+    body.innerHTML =
+      `<div class="lead ${lead.tone}"><span class="ic" aria-hidden="true">${lead.icon}</span><div><span class="kicker">${lead.kicker}</span><h3>${lead.head}</h3><p>${lead.text}</p></div></div>` +
+      `<div class="stories">${main.map(s => story(s, 'story') + `<h3><span class="ic" aria-hidden="true">${s.icon}</span>${s.head}</h3><p>${s.text}</p></div>`).join('')}</div>` +
+      (brief.length ? `<div class="brief"><h4>Kurz notiert</h4><ul>${brief.map(s => `<li><span class="ic" aria-hidden="true">${s.icon}</span>${s.head}</li>`).join('')}</ul></div>` : '');
+  };
+  sel.onchange = draw; draw();
+  return paper;
+}
+
+const views = {
+  'Verlauf'() {
+    const { cum, rank, order } = standings();
+    const root = $('div');
+    const mode = $('select', null, '<option value="rank">Platzierung</option><option value="pts">Punkte</option>');
+    mode.setAttribute('aria-label', 'Anzeige');
+    const card = $('div', 'card'), head = $('div', 'card-head'), slot = $('div');
+    head.append($('h2', null, 'Tabellenverlauf'), mode);
+    card.append(head, slot); root.append(card);
+    const series = src => order().map(p => ({ id: p.id, name: p.name, data: src.get(p.id) }));
+    // Quotenbot: kumulierte Punkte und Platz, den er bei Punktgleichheit hinter den Spielern hätte
+    const botCum = playedDays.reduce((a, d, i) => (a.push((a[i - 1] || 0) + finished.filter(m => m.matchday === d).reduce((s, m) => s + (botTips.get(m.id)?.points || 0), 0)), a), []);
+    const botRank = botCum.map((v, i) => 1 + D.players.filter(p => cum.get(p.id)[i] >= v).length);
+    const draw = () => {
+      const isRank = mode.value === 'rank';
+      slot.replaceChildren(isRank
+        ? lineChart({ labels: playedDays.map(d => d + '.'), series: series(rank), ref: { name: BOT, data: botRank }, yTitle: 'Platz', reverse: true, min: 1, max: D.players.length + 1, fmt: v => v + '.', sortAsc: true })
+        : lineChart({ labels: playedDays.map(d => d + '.'), series: series(cum), ref: { name: BOT, data: botCum }, yTitle: 'Punkte', fmt: v => v + ' Pkt' }));
+    };
+    mode.onchange = draw; draw();
+    card.append($('p', 'note', `Gestrichelt: ${BOT} als Referenz (tippt immer den Quotenfavoriten, zählt nicht zur Wertung). Sein Platz ist der, den er hätte, ohne die Plätze der Spieler zu verschieben.`));
+    return root;
+  },
+
+  'News'() {
+    const root = $('div');
+    root.append(playedDays.length ? newsPaper() : $('div', 'card', '<h2>News</h2><p class="note">Noch keine gespielten Spiele.</p>'));
+    return root;
+  },
+
+  'Spieltagspunkte'() {
+    const { per, cum, wins, order } = standings();
+    const card = $('div', 'card', '<h2>Punkte pro Spieltag</h2>');
+    const t = $('table');
+    t.innerHTML = '<tr><th>Spieler</th>' + playedDays.map(d => `<th>${d}</th>`).join('') + '<th>Σ</th><th title="Spieltagssiege, entscheiden bei Punktgleichheit">Siege</th></tr>';
+    const max = Math.max(...[...per.values()].flat());
+    const row = (name, days, total, w) => {
+      const tr = $('tr', null, `<td>${name}</td>`);
+      days.forEach(v => { const td = $('td', null, v); td.style.backgroundColor = `color-mix(in srgb, var(--accent) ${Math.round(v / max * 85)}%, transparent)`; tr.append(td); });
+      tr.append($('td', null, `<b>${total}</b>`), $('td', null, w)); return tr;
+    };
+    // Quotenbot nach Punkten einsortieren (bei Gleichstand hinter den Spielern)
+    const botDays = playedDays.map(d => finished.filter(m => m.matchday === d).reduce((s, m) => s + (botTips.get(m.id)?.points || 0), 0));
+    const botTotal = botDays.reduce((a, b) => a + b, 0);
+    let botDone = false;
+    const addBot = () => { const tr = row(BOT, botDays, botTotal, '–'); tr.className = 'bot'; tr.title = 'Tippt immer den Quotenfavoriten: Heimsieg 2:1, Remis 1:1, Auswärtssieg 1:2'; t.append(tr); botDone = true; };
+    order().forEach(p => {
+      if (!botDone && botTotal > cum.get(p.id).at(-1)) addBot();
+      t.append(row(p.name, per.get(p.id), cum.get(p.id).at(-1), wins.get(p.id).at(-1)));
+    });
+    if (!botDone) addBot();
+    card.append(t, $('p', 'note', `${BOT} (Referenz, zählt nicht zur Wertung): tippt immer den Quotenfavoriten – Heimsieg 2:1, Remis 1:1, Auswärtssieg 1:2. Spiele ohne Quote tippt er nicht.`));
+    return card;
+  },
+
+  'Spieltag'() {
+    const root = $('div'), sel = $('select');
+    days.forEach(d => sel.append(new Option(d + '. Spieltag', d)));
+    sel.value = playedDays.at(-1) ?? days[0];
+    const bar = $('div', 'row'); bar.append(sel); root.append(bar);
+    const card = $('div', 'card'); root.append(card);
+    const draw = () => {
+      const ms = D.matches.filter(m => m.matchday == sel.value);
+      const t = $('table');
+      t.innerHTML = '<tr><th>Spieler</th>' + ms.map(m => `<th title="${m.home} – ${m.away}">${abbr(m.home)}–${abbr(m.away)}<br>${m.result ? m.result.join(':') : '–:–'}</th>`).join('') + '<th>Σ</th></tr>';
+      D.players.forEach(p => {
+        let sum = 0; const tr = $('tr', null, `<td>${p.name}</td>`);
+        ms.forEach(m => { const x = tipOf.get(p.id + ':' + m.id); const td = $('td', x ? pcls(x.points) : 'miss', x ? x.tip.join(':') + (x.points ? `<sub> ${x.points}</sub>` : '') : '–'); sum += x?.points || 0; tr.append(td); });
+        tr.append($('td', null, `<b>${sum}</b>`)); t.append(tr);
+      });
+      let botSum = 0; const btr = $('tr', 'bot', `<td>${BOT}</td>`);
+      ms.forEach(m => { const x = botTips.get(m.id); btr.append($('td', x ? pcls(x.points) : 'miss', x ? x.tip.join(':') + (x.points ? `<sub> ${x.points}</sub>` : '') : '–')); botSum += x?.points || 0; });
+      btr.append($('td', null, `<b>${botSum}</b>`)); t.append(btr);
+      card.replaceChildren(t);
+    };
+    sel.onchange = draw; draw(); return root;
+  },
+
+  'Statistik'() {
+    const rows = D.players.map(p => {
+      const ts = D.tips.filter(t => t.player === p.id && byMatch.get(t.match).result);
+      let exact = 0, diff = 0, tend = 0, gH = 0, gA = 0, contra = 0, draws = 0, points = 0;
+      for (const t of ts) {
+        const m = byMatch.get(t.match);
+        if (t.tip[0] === m.result[0] && t.tip[1] === m.result[1]) exact++;
+        if (t.points === 3) diff++;
+        if (sign(t.tip) === sign(m.result)) tend++;
+        gH += t.tip[0]; gA += t.tip[1]; points += t.points || 0;
+        if (sign(t.tip) === 0) draws++;
+        const votes = [-1, 0, 1].map(s => D.tips.filter(u => u.match === t.match && sign(u.tip) === s).length);
+        if (votes[sign(t.tip) + 1] < Math.max(...votes) ) contra++;
+      }
+      const n = ts.length || 1;
+      return { name: p.name, n: ts.length, points, exact: exact / n, diff: diff / n, tend: tend / n, goals: (gH + gA) / n, draws: draws / n, contra: contra / n, ppt: points / n };
+    }).sort((a, b) => b.points - a.points);
+    const pc = v => Math.round(v * 100) + ' %';
+    const card = $('div', 'card', '<h2>Tippverhalten</h2>');
+    const t = $('table');
+    t.innerHTML = '<tr><th>Spieler</th><th>Tipps</th><th>Punkte</th><th>Ø Pkt/Tipp</th><th>Exakt (4)</th><th>Differenz (3)</th><th>Tendenz ges.</th><th>Ø Tore</th><th>Remis getippt</th><th>Gegen Mehrheit</th></tr>' +
+      rows.map(r => `<tr><td>${r.name}</td><td>${r.n}</td><td>${r.points}</td><td>${r.ppt.toFixed(2)}</td><td>${pc(r.exact)}</td><td>${pc(r.diff)}</td><td>${pc(r.tend)}</td><td>${r.goals.toFixed(2)}</td><td>${pc(r.draws)}</td><td>${pc(r.contra)}</td></tr>`).join('');
+    card.append(t, $('p', 'note', '„Gegen Mehrheit“: Anteil der Tipps, deren Tendenz (Heim/Remis/Gast) nicht die meistgetippte der Runde war.'));
+    return card;
+  },
+
+  'Spielerprofil'() {
+    const sc = standings(), tot = id => sc.cum.get(id).at(-1) ?? 0;
+    const sorted = sc.order();
+    const dec = (v, n = 2) => v.toFixed(n).replace('.', ',');
+    const pc = v => Math.round(v * 100) + ' %';
+
+    // Meistgetippte Tendenz je Spiel (für „gegen die Mehrheit“)
+    const major = new Map(finished.map(m => {
+      const votes = [-1, 0, 1].map(s => D.tips.filter(u => u.match === m.id && sign(u.tip) === s).length);
+      return [m.id, votes.map((v, i) => v === Math.max(...votes) ? i - 1 : null).filter(v => v != null)];
+    }));
+    const recsOf = id => finished.map(m => ({ m, t: tipOf.get(id + ':' + m.id) })).filter(x => x.t)
+      .sort((a, b) => a.m.kickoff.localeCompare(b.m.kickoff));
+    const statOf = id => {
+      const r = recsOf(id), n = r.length || 1, share = f => r.filter(f).length / n, mean = f => r.reduce((s, x) => s + f(x), 0) / n;
+      const wo = r.filter(x => x.m.odds);
+      return { n: r.length, ppt: mean(x => x.t.points || 0),
+        exact: share(x => x.t.points === 4), diff: share(x => x.t.points === 3), tend: share(x => sign(x.t.tip) === sign(x.m.result)),
+        home: share(x => sign(x.t.tip) === 1), draw: share(x => sign(x.t.tip) === 0), away: share(x => sign(x.t.tip) === -1),
+        goals: mean(x => x.t.tip[0] + x.t.tip[1]), contra: share(x => !major.get(x.m.id).includes(sign(x.t.tip))),
+        odds: wo.length ? wo.reduce((s, x) => s + x.m.odds['hda'[1 - sign(x.t.tip)]], 0) / wo.length : null };
+    };
+    const all = new Map(D.players.map(p => [p.id, statOf(p.id)]));
+    const active = D.players.filter(p => all.get(p.id).n);
+    const fin = finished.length || 1;
+    const actual = { home: finished.filter(m => sign(m.result) === 1).length / fin, draw: finished.filter(m => sign(m.result) === 0).length / fin,
+      away: finished.filter(m => sign(m.result) === -1).length / fin, goals: finished.reduce((s, m) => s + m.result[0] + m.result[1], 0) / fin };
+
+    const sel = $('select');
+    sorted.forEach(p => sel.append(new Option(p.name, p.id)));
+    try { const s = localStorage.getItem('player'); if (byPlayer.has(s)) sel.value = s; } catch {}
+    const root = $('div'), body = $('div'), head = $('div', 'who-head'), title = $('h2'), hint = $('span', null, 'Statistik zu den Tipps dieses Spielers');
+    const pick = $('div', 'pick'), lab = $('label', null, 'Spieler wechseln'); lab.htmlFor = sel.id = 'player-select';
+    pick.append(lab, sel); head.append(title, hint, pick); root.append(head, body);
+    let chart;
+
+    const draw = () => {
+      const id = sel.value, s = all.get(id), r = recsOf(id);
+      try { localStorage.setItem('player', id); } catch {}
+      chart?.destroy();
+      const pos = 1 + sorted.filter(q => sc.cmp()(q, byPlayer.get(id)) < 0).length;
+      const missed = finished.length - s.n;
+      const avgPpt = active.reduce((a, p) => a + all.get(p.id).ppt, 0) / (active.length || 1);
+
+      const kpis = $('div', 'kpis');
+      kpis.innerHTML = [
+        [pos + '.', `Platz · ${tot(id)} Punkte`],
+        [dec(s.ppt), `Ø Punkte pro Tipp (Runde: ${dec(avgPpt)})`],
+        [r.filter(x => x.t.points === 4).length, 'Volltreffer (exaktes Ergebnis)'],
+        [pc(s.tend), 'richtige Tendenz'],
+        [s.n, missed ? `Tipps abgegeben, ${missed} verpasst` : 'Tipps abgegeben, keiner verpasst'],
+        [pc(s.contra), 'gegen die Mehrheit getippt']
+      ].map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('');
+
+      // Punkte je Spieltag vs. Rundenschnitt
+      const ccard = $('div', 'card', '<h2>Punkte pro Spieltag</h2>'), wrap = $('div', 'chart'), cv = $('canvas');
+      wrap.style.height = '300px'; wrap.append(cv); ccard.append(wrap);
+      const avgDay = playedDays.map((_, i) => +(D.players.reduce((a, p) => a + sc.per.get(p.id)[i], 0) / D.players.length).toFixed(1));
+      setTimeout(() => chart = new Chart(cv, { type: 'bar',
+        data: { labels: playedDays.map(d => d + '.'), datasets: [
+          { type: 'bar', label: byPlayer.get(id).name, data: sc.per.get(id), backgroundColor: cssv('--accent'), borderRadius: 3, order: 1 },
+          { type: 'line', label: 'Ø Runde', data: avgDay, borderColor: cssv('--series-2'), backgroundColor: cssv('--series-2'), borderWidth: 2, borderDash: [5, 4], pointRadius: 0, tension: .25, order: 0 }] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { labels: { boxWidth: 10, boxHeight: 10 } },
+            tooltip: { callbacks: { title: it => it[0].label.replace('.', '. Spieltag'), label: it => ` ${it.dataset.label}: ${dec(it.parsed.y, it.datasetIndex ? 1 : 0)} Pkt` } } },
+          scales: { y: { beginAtZero: true, title: { display: true, text: 'Punkte' }, ticks: { precision: 0 }, grid: { color: cssv('--line-soft') } },
+            x: { title: { display: true, text: 'Spieltag' }, grid: { display: false } } } } }));
+
+      // Kennzahlen im Vergleich zur Runde
+      const rankOf = k => 1 + active.filter(p => all.get(p.id)[k] > s[k]).length;
+      const avgOf = k => { const v = active.map(p => all.get(p.id)[k]).filter(v => v != null); return v.reduce((a, b) => a + b, 0) / (v.length || 1); };
+      const rows = [
+        ['Ø Punkte pro Tipp', 'ppt', dec], ['Exakt (4 Pkt)', 'exact', pc], ['Differenz (3 Pkt)', 'diff', pc], ['Richtige Tendenz', 'tend', pc],
+        ['Heimsieg getippt', 'home', pc, actual.home], ['Remis getippt', 'draw', pc, actual.draw], ['Auswärtssieg getippt', 'away', pc, actual.away],
+        ['Ø Tore getippt', 'goals', dec, actual.goals], ['Gegen die Mehrheit', 'contra', pc]
+      ];
+      if (s.odds != null) rows.push(['Ø Quote des Tipps', 'odds', dec]);
+      const vcard = $('div', 'card', '<h2>Im Vergleich zur Runde</h2>'), vt = $('table');
+      vt.innerHTML = `<tr><th>Kennzahl</th><th>${byPlayer.get(id).name}</th><th>Ø Runde</th><th>Tatsächlich</th><th>Rang</th></tr>` +
+        rows.map(([l, k, f, act]) => `<tr><td>${l}</td><td><b>${f(s[k])}</b></td><td>${f(avgOf(k))}</td><td>${act != null ? f(act) : ''}</td><td>${rankOf(k)}.</td></tr>`).join('');
+      vcard.append(stack(vt), $('p', 'note', `„Tatsächlich“: Anteil bzw. Schnitt der gespielten Spiele. Rang unter ${active.length} Spielern, 1 = höchster Wert.`));
+
+      // Punkteverteilung
+      const dcard = $('div', 'card', '<h2>Punkteverteilung</h2>');
+      const cnt = [4, 3, 2, 0].map(p => [p, r.filter(x => (x.t.points || 0) === p).length]);
+      const lab = { 4: 'Exakt', 3: 'Differenz', 2: 'Tendenz', 0: 'Daneben' };
+      dcard.append($('div', 'dist', cnt.filter(([, n]) => n).map(([p, n]) => `<span class="${pcls(p)}" style="flex:${n}" title="${lab[p]}: ${n}">${n}</span>`).join('')),
+        $('div', 'legend', cnt.map(([p, n]) => `<span><i class="${pcls(p)}"></i>${lab[p]} (${p} Pkt): ${n} · ${pc(n / (s.n || 1))}</span>`).join('')));
+
+      // Lieblingsergebnisse
+      const fav = {}; r.forEach(x => { const k = x.t.tip.join(':'); (fav[k] ||= { n: 0, hit: 0 }).n++; if (x.t.points === 4) fav[k].hit++; });
+      const real = {}; finished.forEach(m => { const k = m.result.join(':'); real[k] = (real[k] || 0) + 1; });
+      dcard.append($('h2', null, 'Lieblingsergebnisse'));
+      dcard.lastChild.style.marginTop = '24px';
+      const ft = $('table');
+      ft.innerHTML = '<tr><th>Tipp</th><th>Getippt</th><th>Anteil</th><th>Davon exakt</th><th>So ausgegangen</th></tr>' +
+        Object.entries(fav).sort((a, b) => b[1].n - a[1].n).slice(0, 5).map(([k, v]) => `<tr><td><b>${k}</b></td><td>${v.n}×</td><td>${pc(v.n / s.n)}</td><td>${v.hit}</td><td>${real[k] || 0}×</td></tr>`).join('');
+      dcard.append(stack(ft));
+
+      // Lieblingsteams und Angstgegner
+      const teams = {};
+      r.forEach(x => [x.m.home, x.m.away].forEach(tm => { const e = (teams[tm] ||= { pts: 0, n: 0 }); e.pts += x.t.points || 0; e.n++; }));
+      const tl = Object.entries(teams).filter(([, e]) => e.n >= 3).map(([tm, e]) => ({ tm, ...e, avg: e.pts / e.n })).sort((a, b) => b.avg - a.avg || b.n - a.n);
+      const trow = (label, x, i) => `<tr><td>${i ? '' : label}</td><td class="txt">${x.tm}</td><td>${x.n}</td><td>${x.pts}</td><td>${dec(x.avg)}</td></tr>`;
+      const tcard = $('div', 'card', '<h2>Lieblingsteams &amp; Angstgegner</h2>'), tt = $('table');
+      tt.innerHTML = '<tr><th></th><th>Team</th><th>Spiele</th><th>Punkte</th><th>Ø Pkt</th></tr>' +
+        tl.slice(0, 3).map((x, i) => trow('💚 Läuft', x, i)).join('') + tl.slice(-3).reverse().map((x, i) => trow('💔 Läuft nicht', x, i)).join('');
+      tcard.append(stack(tt), $('p', 'note', 'Ø Punkte aus Spielen mit Beteiligung des Teams (Heim und Auswärts), mindestens 3 Spiele.'));
+
+      // Abweichung vom Rest der Runde: Anteil je Tendenz und je Ergebnis
+      const others = D.tips.filter(t => t.player !== id && byMatch.get(t.match).result);
+      const shareMap = (ts, key) => { const c = new Map(); ts.forEach(t => c.set(key(t), (c.get(key(t)) || 0) + 1)); return k => (c.get(k) || 0) / (ts.length || 1); };
+      const mine = r.map(x => x.t);
+      const devRows = (keys, key, label) => { const a = shareMap(mine, key), b = shareMap(others, key); return keys.map(k => ({ label: label(k), p: a(k), o: b(k), d: a(k) - b(k) })); };
+      const tendRows = devRows([1, 0, -1], t => sign(t.tip), k => ({ 1: 'Heim', 0: 'Remis', '-1': 'Auswärts' })[k]);
+      const resKeys = [...new Set([...mine, ...others].map(t => t.tip.join(':')))];
+      const resRows = devRows(resKeys, t => t.tip.join(':'), k => k).filter(x => Math.max(x.p, x.o) >= .04)
+        .sort((a, b) => Math.abs(b.d) - Math.abs(a.d)).slice(0, 10).sort((a, b) => b.d - a.d);
+      const scale = Math.max(.1, ...[...tendRows, ...resRows].map(x => Math.abs(x.d)));
+      const pp = v => (v > 0 ? '+' : v < 0 ? '−' : '±') + Math.abs(Math.round(v * 100));
+      const devTable = (head, rows) => `<table class="devt"><tr><th>${head}</th><th>${byPlayer.get(id).name}</th><th>Rest</th><th>Abweichung</th><th>Pp</th></tr>` + rows.map(x =>
+        `<tr><td><b>${x.label}</b></td><td>${pc(x.p)}</td><td>${pc(x.o)}</td><td><div class="dev"><span class="${x.d >= 0 ? 'up' : 'dn'}" style="width:${Math.abs(x.d) / scale * 50}%"></span></div></td><td class="${x.d >= 0 ? 'pos-up' : 'pos-dn'}">${pp(x.d)}</td></tr>`).join('') + '</table>';
+      const acard = $('div', 'card', '<h2>Tippt häufiger / seltener als die anderen</h2>' + devTable('Tendenz', tendRows) +
+        '<div style="height:16px"></div>' + devTable('Ergebnis', resRows));
+      acard.append($('p', 'note', 'Anteil an den eigenen Tipps im Vergleich zu allen Tipps der übrigen Spieler, Abweichung in Prozentpunkten (Pp). Ergebnisse mit mindestens 4 % Anteil, die zehn größten Abweichungen.'));
+
+      const g1 = $('div', 'grid2'), g2 = $('div', 'grid2');
+      g1.append(vcard, dcard); g2.append(acard, tcard);
+      [ccard, vcard, dcard, acard, tcard].forEach(c => c.querySelectorAll('h2').forEach(h => h.append($('span', 'who', byPlayer.get(id).name))));
+      title.textContent = byPlayer.get(id).name;
+      body.replaceChildren(kpis, ccard, g1, g2);
+    };
+    if (!finished.length) { root.append($('div', 'card', '<h2>Spieler</h2><p class="note">Noch keine gespielten Spiele.</p>')); return root; }
+    sel.onchange = draw; draw();
+    return root;
+  },
+
+  'Awards'() {
+    const sc = standings();
+    const recs = new Map(D.players.map(p => [p.id, []]));
+    const tippers = new Map(), hits = new Map();
+    for (const t of D.tips) {
+      const m = byMatch.get(t.match);
+      if (!m?.result || !recs.has(t.player)) continue;
+      recs.get(t.player).push({ t, m, pts: t.points || 0 });
+      tippers.set(m.id, (tippers.get(m.id) || 0) + 1);
+      if (sign(t.tip) === sign(m.result)) hits.set(m.id, (hits.get(m.id) || 0) + 1);
+    }
+    recs.forEach(a => a.sort((x, y) => x.m.kickoff < y.m.kickoff ? -1 : x.m.kickoff > y.m.kickoff ? 1 : 0));
+
+    const day = m => new Date(m.kickoff).getDay(), hour = m => new Date(m.kickoff).getHours();
+    const oc = m => sign(m.result), goals = m => m.result[0] + m.result[1];
+    const sumPts = (r, f) => r.filter(f).reduce((s, x) => s + x.pts, 0);
+    const cnt = (r, f) => r.filter(f).length;
+    const exact = x => x.t.tip[0] === x.m.result[0] && x.t.tip[1] === x.m.result[1];
+    const oddsOf = x => x.m.odds?.['hda'[1 - oc(x.m)]];                 // Quote des tatsächlichen Ausgangs
+    const favWon = x => x.m.odds && oddsOf(x) === Math.min(x.m.odds.h, x.m.odds.d, x.m.odds.a);
+    // Anteil der Tipps (in %) auf den Ausgang mit der niedrigsten Quote; null ohne Quoten
+    const favShare = r => { const wo = r.filter(x => x.m.odds); return wo.length ? 100 * cnt(wo, x => x.m.odds['hda'[1 - sign(x.t.tip)]] === Math.min(x.m.odds.h, x.m.odds.d, x.m.odds.a)) / wo.length : null; };
+    const streak = (r, f) => { let best = 0, cur = 0; r.forEach(x => { cur = f(x) ? cur + 1 : 0; best = Math.max(best, cur); }); return best; };
+    const dayIdx = i => playedDays[i] + '. Spieltag';
+    const extreme = (arr, pick) => { const v = pick(...arr); return [v, dayIdx(arr.indexOf(v))]; };
+    // Tiefpunkt: nur vollständig gespielte Spieltage, an denen der Spieler getippt hat
+    const doneDays = new Set(playedDays.filter(md => D.matches.every(m => m.matchday !== md || m.result)));
+    const lowDay = (r, arr) => {
+      const tipped = new Set(r.map(x => x.m.matchday));
+      const idx = arr.map((_, i) => i).filter(i => doneDays.has(playedDays[i]) && tipped.has(playedDays[i]));
+      if (!idx.length) return null;
+      const i = idx.reduce((a, b) => arr[b] < arr[a] ? b : a);
+      return [arr[i], dayIdx(i)];
+    };
+    const rankMove = (id, sc) => { const r = sc.rank.get(id); let best = [0, '']; r.forEach((v, i) => { if (i && r[i - 1] - v > best[0]) best = [r[i - 1] - v, 'am ' + dayIdx(i)]; }); return best; };
+    const dropMove = (id, sc) => { const r = sc.rank.get(id); let best = [0, '']; r.forEach((v, i) => { if (i && v - r[i - 1] > best[0]) best = [v - r[i - 1], 'am ' + dayIdx(i)]; }); return best; };
+    const last3 = (id, sc) => sc.per.get(id).slice(-3).reduce((a, b) => a + b, 0);
+    const avg = (r, f) => r.length ? r.reduce((s, x) => s + f(x), 0) / r.length : 0;
+
+    // score(r, id, sc) -> Zahl oder [Zahl, Zusatz]; asc: kleinster Wert gewinnt
+    const A = [
+      ['🏠', 'Heimsieg-König', 'Meiste Punkte bei Spielen, die mit einem Heimsieg endeten', r => sumPts(r, x => oc(x.m) === 1), 'Pkt'],
+      ['🤝', 'Remis-Experte', 'Meiste Punkte bei Unentschieden', r => sumPts(r, x => oc(x.m) === 0), 'Pkt'],
+      ['✈️', 'Auswärts-Spezialist', 'Meiste Punkte bei Auswärtssiegen', r => sumPts(r, x => oc(x.m) === -1), 'Pkt'],
+      ['🎯', 'Volltreffer-König', 'Meiste exakt getippten Ergebnisse', r => cnt(r, exact), 'Treffer'],
+      ['🐺', 'Außenseiter-Jäger', 'Meiste Punkte bei Spielen, in denen der Ausgang Quote ≥ 3,5 hatte', r => sumPts(r, x => oddsOf(x) >= 3.5), 'Pkt'],
+      ['🏦', 'Favoriten-Flüsterer', 'Meiste Punkte bei Spielen, die der Favorit gewann', r => sumPts(r, favWon), 'Pkt'],
+      ['📊', 'Quotentreu', 'Höchster Anteil an Tipps auf den Favoriten (niedrigste Quote; nur Spiele mit Quoten)', favShare, '%', 1],
+      ['🎲', 'Querdenker', 'Niedrigster Anteil an Tipps auf den Favoriten, also am häufigsten gegen die Quote (nur Spiele mit Quoten)', favShare, '%', 1, true],
+      ['🕵️', 'Geheimtipp-Gewinner', 'Richtige Tendenz, obwohl höchstens ein Viertel der Runde richtig lag', r => cnt(r, x => x.pts > 0 && hits.get(x.m.id) / tippers.get(x.m.id) <= .25), 'Tipps'],
+      ['🥅', 'Torfestival-Experte', 'Meiste Punkte bei Spielen mit mindestens 4 Toren', r => sumPts(r, x => goals(x.m) >= 4), 'Pkt'],
+      ['🧱', 'Geduldsspiel-Experte', 'Meiste Punkte bei Spielen mit höchstens 1 Tor', r => sumPts(r, x => goals(x.m) <= 1), 'Pkt'],
+      ['⚽', 'Torfabrik', 'Höchster Schnitt an getippten Toren pro Spiel', r => avg(r, x => x.t.tip[0] + x.t.tip[1]), 'Tore', 2],
+      ['🛡️', 'Mauerbauer', 'Niedrigster Schnitt an getippten Toren pro Spiel', r => avg(r, x => x.t.tip[0] + x.t.tip[1]), 'Tore', 2, true],
+      ['🕊️', 'Friedensstifter', 'Meiste Unentschieden getippt', r => cnt(r, x => sign(x.t.tip) === 0), 'Remis'],
+      ['🔁', 'Gewohnheitstier', 'Häufigstes Ergebnis, das ein Spieler getippt hat', r => { const c = {}; r.forEach(x => { const k = x.t.tip.join(':'); c[k] = (c[k] || 0) + 1; }); const [k, n] = Object.entries(c).sort((a, b) => b[1] - a[1])[0] || ['', 0]; return [n, k]; }, '×'],
+      ['🌙', 'Freitagsfeuer', 'Meiste Punkte bei Freitagsspielen', r => sumPts(r, x => day(x.m) === 5), 'Pkt'],
+      ['🥨', 'Konferenz-Profi', 'Meiste Punkte bei Samstagsspielen vor 17 Uhr', r => sumPts(r, x => day(x.m) === 6 && hour(x.m) < 17), 'Pkt'],
+      ['🌟', 'Topspiel-Profi', 'Meiste Punkte beim Samstagabend-Spiel (ab 17 Uhr)', r => sumPts(r, x => day(x.m) === 6 && hour(x.m) >= 17), 'Pkt'],
+      ['☀️', 'Sonntagsschütze', 'Meiste Punkte bei Sonntagsspielen', r => sumPts(r, x => day(x.m) === 0), 'Pkt'],
+      ['🍺', 'Englische-Woche-Profi', 'Meiste Punkte bei Spielen unter der Woche (Mo–Do)', r => sumPts(r, x => [1, 2, 3, 4].includes(day(x.m))), 'Pkt'],
+      ['🧩', 'Team-Versteher', 'Meiste Punkte bei Spielen eines einzelnen Teams (Heim und Auswärts)', r => { const c = {}; r.forEach(x => [x.m.home, x.m.away].forEach(t => c[t] = (c[t] || 0) + x.pts)); const [k, n] = Object.entries(c).sort((a, b) => b[1] - a[1])[0] || ['', 0]; return [n, k]; }, 'Pkt'],
+      ['💶', 'Wett-Champion', 'Höchster Wettgewinn bei 1 € pro Tipp auf die Tendenz (nur Spiele mit Quoten)', r => r.reduce((a, x) => a + (x.m.odds ? (sign(x.t.tip) === oc(x.m) ? x.m.odds['hda'[1 - sign(x.t.tip)]] - 1 : -1) : 0), 0), '€', 2],
+      ['👑', 'Spieltagskönig', 'Meiste Spieltagssiege (bei Gleichstand zählen alle)', (r, id, sc) => sc.per.get(id).filter((v, i) => v > 0 && v === Math.max(...D.players.map(p => sc.per.get(p.id)[i]))).length, 'Titel'],
+      ['🔥', 'Bester Spieltag', 'Meiste Punkte an einem einzelnen Spieltag', (r, id, sc) => extreme(sc.per.get(id), Math.max), 'Pkt'],
+      ['🥶', 'Tiefpunkt', 'Wenigste Punkte an einem vollständig gespielten Spieltag (nur Spieltage mit eigenen Tipps)', (r, id, sc) => lowDay(r, sc.per.get(id)), 'Pkt', 0, true],
+      ['⚡', 'Serienpunkter', 'Längste Serie von Tipps in Folge mit Punkten', r => streak(r, x => x.pts > 0), 'Spiele'],
+      ['🏜️', 'Durststrecke', 'Längste Serie von Tipps in Folge ohne Punkte', r => streak(r, x => x.pts === 0), 'Spiele'],
+      ['😬', 'Knapp daneben', 'Tipps ohne Punkte, die nur ein Tor vom Ergebnis entfernt waren', r => cnt(r, x => x.pts === 0 && Math.abs(x.t.tip[0] - x.m.result[0]) + Math.abs(x.t.tip[1] - x.m.result[1]) === 1), 'Tipps'],
+      ['🥚', 'Nullnummer', 'Meiste Tipps ohne Punkte', r => cnt(r, x => x.pts === 0), 'Tipps'],
+      ['🚀', 'Raketenstart', 'Größter Sprung nach oben in der Tabelle an einem Spieltag', (r, id, sc) => rankMove(id, sc), 'Plätze'],
+      ['📉', 'Absturz', 'Größter Fall in der Tabelle an einem Spieltag', (r, id, sc) => dropMove(id, sc), 'Plätze'],
+      ['📈', 'Formkurve', 'Meiste Punkte aus den letzten drei Spieltagen', (r, id, sc) => last3(id, sc), 'Pkt']
+    ];
+
+    // Stand vor dem letzten Spieltag, um Awards mit neuem Gewinner zu markieren
+    const lastDay = playedDays.at(-1), hasPrev = playedDays.length > 1;
+    const cut = m => new Map([...m].map(([k, a]) => [k, a.slice(0, -1)]));
+    const prevSc = { per: cut(sc.per), cum: cut(sc.cum), rank: cut(sc.rank) };
+    const prevRecs = new Map([...recs].map(([id, r]) => [id, r.filter(x => x.m.matchday !== lastDay)]));
+    const ranking = (fn, asc, recs, sc) => D.players.map(p => { const v = fn(recs.get(p.id), p.id, sc); return { id: p.id, name: p.name, v: Array.isArray(v) ? v[0] : v, extra: Array.isArray(v) ? v[1] : '' }; })
+      .filter(r => recs.get(r.id).length && r.v != null)
+      .sort((a, b) => asc ? a.v - b.v : b.v - a.v);
+    const winnersOf = (rows, asc) => !rows.length || (!asc && rows[0].v === 0) ? [] : rows.filter(r => r.v === rows[0].v);
+
+    const root = $('div'), grid = $('div', 'awards');
+    let changed = 0;
+    for (const [icon, title, desc, fn, unit, dec = 0, asc] of A) {
+      const rows = ranking(fn, asc, recs, sc);
+      const top = rows[0]?.v;
+      const winners = winnersOf(rows, asc);
+      const none = !winners.length;
+      const fmt = r => r.v.toFixed(dec).replace('.', ',') + ' ' + unit + (r.extra ? ' · ' + r.extra : '');
+      const shown = none ? [] : winners.length >= 3 ? winners : rows.slice(0, 3);
+      const before = hasPrev ? winnersOf(ranking(fn, asc, prevRecs, prevSc), asc).map(r => r.name) : [];
+      const isNew = hasPrev && !none && winners.map(r => r.name).join() !== before.join();
+      if (isNew) changed++;
+      const badge = isNew ? `<span class="badge-new" title="Vorher: ${before.join(', ') || 'noch keiner'}">Wechsel</span>` : '';
+      const card = $('div', 'award' + (isNew ? ' new' : ''), `<h3><span class="ic" aria-hidden="true">${icon}</span>${title}${badge}</h3><div class="desc">${desc}</div>`);
+      const ol = $('ol', null, none ? '<li>noch keiner</li>' : shown.map(r => `<li class="${r.v === top ? 'win' : ''}"><span>${r.name}</span><span>${fmt(r)}</span></li>`).join(''));
+      if (isNew) ol.append($('li', 'prev', `vorher: ${before.join(', ') || 'noch keiner'}`));
+      card.append(ol); grid.append(card);
+    }
+    const newNote = hasPrev ? ` <span class="badge-new">Wechsel</span> markiert die ${changed} Awards, deren Gewinner sich am ${lastDay}. Spieltag geändert hat.` : '';
+    root.append($('div', 'card', `<h2>Awards (${finished.length} gespielte Spiele)</h2><p class="note">Platz 1 ist gelb markiert, bei Gleichstand teilen sich alle Erstplatzierten den Titel.${newNote}</p>`), grid);
+
+    // Spiel-Awards
+    const ms = finished.filter(m => tippers.get(m.id)).map(m => ({ m, h: hits.get(m.id) || 0, n: tippers.get(m.id) }));
+    const row = (label, x) => `<tr><td>${label}</td><td class="txt">${x.m.matchday}. ${x.m.home} – ${x.m.away}</td><td>${x.m.result.join(':')}</td><td>${x.h} von ${x.n}</td></tr>`;
+    const byHits = [...ms].sort((a, b) => a.h / a.n - b.h / b.n || b.m.kickoff.localeCompare(a.m.kickoff));
+    const mcard = $('div', 'card', '<h2>Spiel-Awards</h2>');
+    const t = $('table');
+    t.innerHTML = '<tr><th>Award</th><th>Spiel</th><th>Ergebnis</th><th>Richtige Tendenz</th></tr>' +
+      byHits.slice(0, 3).map((x, i) => row(i ? '' : '🤯 Größte Überraschung', x)).join('') +
+      byHits.slice(-3).reverse().map((x, i) => row(i ? '' : '🍬 Leichteste Beute', x)).join('') +
+      [...ms].sort((a, b) => goals(b.m) - goals(a.m)).slice(0, 3).map((x, i) => row(i ? '' : '🎆 Torfestival', x)).join('');
+    mcard.append(stack(t)); root.append(mcard);
+
+    // Team-Versteher: bester Tipper je Team
+    const teams = {};
+    recs.forEach((r, id) => r.forEach(x => [x.m.home, x.m.away].forEach(tm => { const e = ((teams[tm] ||= {})[id] ||= { pts: 0, n: 0 }); e.pts += x.pts; e.n++; })));
+    const tcard = $('div', 'card', '<h2>Team-Versteher</h2>');
+    const tt = $('table');
+    tt.innerHTML = '<tr><th>Team</th><th>Bester Tipper</th><th>Punkte</th><th>Ø je Spiel</th><th>Spiele</th></tr>' + Object.entries(teams).map(([tm, e]) => {
+      const best = Object.entries(e).sort((a, b) => b[1].pts - a[1].pts || a[1].n - b[1].n)[0];
+      return { tm, name: byPlayer.get(best[0]).name, ...best[1] };
+    }).sort((a, b) => b.pts / b.n - a.pts / a.n).map(r => `<tr><td>${r.tm}</td><td>${r.name}</td><td>${r.pts}</td><td>${(r.pts / r.n).toFixed(2).replace('.', ',')}</td><td>${r.n}</td></tr>`).join('');
+    tcard.append(tt, $('p', 'note', 'Pro Team der Spieler mit den meisten Punkten aus dessen Spielen (Heim und Auswärts), sortiert nach Ø je Spiel.'));
+    root.append(tcard);
+
+    // Tipp-Zwillinge und Gegenpole
+    const pairsOf = ms => {
+      const pairs = [];
+      for (let i = 0; i < D.players.length; i++) for (let j = i + 1; j < D.players.length; j++) {
+        let same = 0, both = 0;
+        ms.forEach(m => { const a = tipOf.get(D.players[i].id + ':' + m.id), b = tipOf.get(D.players[j].id + ':' + m.id); if (a && b) { both++; if (a.tip[0] === b.tip[0] && a.tip[1] === b.tip[1]) same++; } });
+        if (both) pairs.push({ key: D.players[i].id + ':' + D.players[j].id, a: D.players[i].name, b: D.players[j].name, same, both, rate: same / both });
+      }
+      return pairs;
+    };
+    const copiers = ps => [...ps].sort((a, b) => b.rate - a.rate || b.same - a.same).slice(0, 3);
+    const opposites = ps => [...ps].sort((a, b) => a.rate - b.rate || a.same - b.same).slice(0, 3);
+    const pairs = pairsOf(finished), prevPairs = hasPrev ? pairsOf(finished.filter(m => m.matchday !== lastDay)) : [];
+    // Paare, die vor dem letzten Spieltag noch nicht in der jeweiligen Top 3 standen
+    const prow = (label, prev) => (x, i) => {
+      const isNew = hasPrev && !prev.some(p => p.key === x.key);
+      const badge = isNew ? ` <span class="badge-new" title="Vor dem ${lastDay}. Spieltag nicht in der Liste">Wechsel</span>` : '';
+      return `<tr><td>${i ? '' : label}</td><td class="txt">${x.a} &amp; ${x.b}${badge}</td><td>${x.same} von ${x.both}</td><td>${Math.round(x.rate * 100)} %</td></tr>`;
+    };
+    const zcard = $('div', 'card', '<h2>Kopierer &amp; Gegenpole</h2>');
+    const zt = $('table');
+    zt.innerHTML = '<tr><th>Award</th><th>Paar</th><th>Identische Tipps</th><th>Quote</th></tr>' +
+      copiers(pairs).map(prow('👯 Kopierer', copiers(prevPairs))).join('') +
+      opposites(pairs).map(prow('🧲 Gegenpol', opposites(prevPairs))).join('');
+    const pairNote = hasPrev ? ` <span class="badge-new">Wechsel</span> markiert Paare, die am ${lastDay}. Spieltag neu in die Liste gekommen sind.` : '';
+    zcard.append(stack(zt), $('p', 'note', 'Anteil exakt gleicher Tipps in allen gemeinsam getippten, gespielten Spielen.' + pairNote));
+    root.append(zcard);
+
+    // Pro Spieltag: teuerster Fehltipp und mutigster Treffer (nach Quote)
+    const dcard = $('div', 'card', '<h2>Tipps des Spieltags</h2>');
+    const dt = $('table');
+    const cell = x => x ? `${byPlayer.get(x.t.player).name}: ${x.t.tip.join(':')} bei ${x.m.home} – ${x.m.away} (${x.m.result.join(':')}), Quote ${x.q.toFixed(2).replace('.', ',')}` : '–';
+    const all = []; recs.forEach(r => r.forEach(x => { if (x.m.odds) all.push({ ...x, q: x.m.odds['hda'[1 - sign(x.t.tip)]] }); }));
+    dt.innerHTML = '<tr><th>Spieltag</th><th>💸 Teuerster Fehltipp</th><th>🏅 Mutigster Treffer</th></tr>' + playedDays.map(d => {
+      const ofDay = all.filter(x => x.m.matchday === d);
+      const worst = ofDay.filter(x => x.pts === 0).sort((a, b) => a.q - b.q)[0];
+      const brave = ofDay.filter(x => x.pts > 0).sort((a, b) => b.q - a.q)[0];
+      return `<tr><td>${d}.</td><td class="txt">${cell(worst)}</td><td class="txt">${cell(brave)}</td></tr>`;
+    }).join('');
+    dcard.append(stack(dt), $('p', 'note', 'Teuerster Fehltipp: kein Punkt, obwohl die Quote auf den getippten Ausgang am niedrigsten war (also „sicher“ daneben). Mutigster Treffer: Punkte bei der höchsten Quote auf den getippten Ausgang. Nur Spiele mit Quoten.'));
+    root.append(dcard);
+    return root;
+  },
+
+  'Wettgewinn'() {
+    const root = $('div');
+    const played = D.matches.filter(m => m.result && m.odds);
+    if (!played.length) {
+      root.append($('div', 'card', '<h2>Wettgewinn</h2><p class="note">Keine gespielten Spiele mit Quoten in data.json.</p>'));
+      return root;
+    }
+    const dayList = [...new Set(played.map(m => m.matchday))].sort((a, b) => a - b);
+    const key = t => ['h', 'd', 'a'][1 - sign(t)];                 // Tendenz des Tipps -> Quotenfeld
+    const eur = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ',') + ' €';
+
+    // 1 € je getipptem Spiel: Gewinn = Quote − 1 bei richtiger Tendenz, sonst −1
+    const bilanz = (p, tipFor) => {
+      const perDay = dayList.map(() => 0);
+      let n = 0, hits = 0;
+      for (const m of played) {
+        const t = tipFor(m);
+        if (!t) continue;
+        const win = sign(t.tip) === sign(m.result);
+        n++; if (win) hits++;
+        perDay[dayList.indexOf(m.matchday)] += win ? m.odds[key(t.tip)] - 1 : -1;
+      }
+      const cum = perDay.reduce((a, v, i) => (a.push((a[i - 1] ?? 0) + v), a), []);
+      return { p, n, hits, perDay, cum, profit: cum.at(-1) };
+    };
+    const stats = D.players.map(p => bilanz(p, m => tipOf.get(p.id + ':' + m.id))).filter(r => r.n).sort((a, b) => b.profit - a.profit);
+    const bot = bilanz({ name: BOT }, m => botTips.get(m.id));
+
+    const ptsRank = new Map(standings().order().map((p, i) => [p.id, i + 1]));   // Kicktipp-Platz zum Vergleich
+
+    const ccard = $('div', 'card', '<h2>Kumulierter Gewinn (1 € pro Tipp)</h2>');
+    ccard.append(lineChart({ labels: dayList.map(d => d + '.'), series: stats.map(r => ({ id: r.p.id, name: r.p.name, data: r.cum.map(v => +v.toFixed(2)) })), ref: { name: BOT, data: bot.cum.map(v => +v.toFixed(2)) }, yTitle: 'Gewinn in €', fmt: eur }));
+    root.append(ccard);
+
+    const rcard = $('div', 'card', '<h2>Ranking nach Wettgewinn</h2>');
+    const t = $('table');
+    t.innerHTML = '<tr><th>#</th><th>Spieler</th><th>Wetten</th><th>Treffer</th><th>Einsatz</th><th>Gewinn</th><th>ROI</th><th>Kicktipp-Platz</th></tr>' +
+      // Quotenbot nach Gewinn einsortieren (bei Gleichstand hinter den Spielern), ohne Platz
+      [...stats, bot].sort((a, b) => b.profit - a.profit || (a === bot) - (b === bot)).map(r => {
+        const isBot = r === bot, i = stats.indexOf(r);
+        return `<tr${isBot ? ' class="bot" title="Setzt immer auf den Quotenfavoriten"' : ''}><td>${isBot ? '' : i + 1 + '.'}</td><td>${r.p.name}</td><td>${r.n}</td><td>${r.hits} (${Math.round(r.hits / r.n * 100)} %)</td><td>${r.n},00 €</td><td><b class="${r.profit >= 0 ? 'pos-pos' : 'pos-neg'}">${eur(r.profit)}</b></td><td>${(r.profit / r.n * 100).toFixed(1).replace('.', ',')} %</td><td>${isBot ? '–' : ptsRank.get(r.p.id) + '.'}</td></tr>`;
+      }).join('');
+    rcard.append(t, $('p', 'note', `Annahme: 1 € auf die Tendenz (Heim/Remis/Gast) jedes Tipps; ${played.length} gespielte Spiele mit Quoten. Nur Spiele, bei denen der Spieler getippt hat. ${BOT} (Referenz): setzt immer auf den Quotenfavoriten. Quoten sind der Stand zum Zeitpunkt des Abrufs und können vom Stand bei Anpfiff abweichen.`));
+    root.append(rcard);
+    return root;
+  },
+
+  'Quoten'() {
+    const withOdds = D.matches.filter(m => m.odds);
+    const root = $('div');
+    if (!withOdds.length) {
+      root.append($('div', 'card', '<h2>Wettquoten</h2><p class="note">Noch keine Quoten in data.json. <code>export/odds.json</code> mit <code>export/odds-snippet.js</code> erzeugen und den Export erneut ausführen.</p>'));
+      return root;
+    }
+    const outcome = t => ['h', 'd', 'a'][1 - sign(t)];       // sign 1 = Heimsieg
+    const prob = o => { const r = [1 / o.h, 1 / o.d, 1 / o.a], s = r[0] + r[1] + r[2]; return r.map(x => x / s); };
+    const pc = v => Math.round(v * 100) + ' %';
+
+    // Spielübersicht: Buchmacher-Wahrscheinlichkeit vs. Tippverteilung
+    const mcard = $('div', 'card', `<h2>Quoten vs. Tippverteilung (${withOdds.length} Spiele)</h2>`);
+    const sel = $('select', null, '<option value="all">Alle Spieltage</option>' + [...new Set(withOdds.map(m => m.matchday))].map(d => `<option value="${d}">${d}. Spieltag</option>`).join(''));
+    const bar = $('div', 'row'); bar.append(sel);
+    const mt = $('div');
+    const drawMatches = () => {
+      const ms = withOdds.filter(m => sel.value === 'all' || m.matchday == sel.value);
+      const t = $('table');
+      t.innerHTML = '<tr><th>Spiel</th><th>Quote 1</th><th>X</th><th>2</th><th>Buchm. 1/X/2</th><th>Tipper 1/X/2</th><th>Ergebnis</th></tr>' + ms.map(m => {
+        const tips = D.tips.filter(x => x.match === m.id);
+        const share = [1, 0, -1].map(sg => tips.length ? tips.filter(x => sign(x.tip) === sg).length / tips.length : 0);
+        const fav = prob(m.odds);
+        return `<tr><td>${m.matchday}. ${m.home} – ${m.away}</td><td>${m.odds.h.toFixed(2)}</td><td>${m.odds.d.toFixed(2)}</td><td>${m.odds.a.toFixed(2)}</td><td>${fav.map(pc).join(' / ')}</td><td>${tips.length ? share.map(pc).join(' / ') : '–'}</td><td>${m.result ? m.result.join(':') : '–'}</td></tr>`;
+      }).join('');
+      mt.replaceChildren(t);
+    };
+    sel.onchange = drawMatches; drawMatches();
+    mcard.append(bar, mt, $('p', 'note', 'Buchmacher-Wahrscheinlichkeiten ohne Marge (Kehrwerte normiert). Quoten: Wettanbieter-Einblendung auf der Tippabgabe.'));
+
+    // Spieler: Mut zum Außenseiter
+    const rows = D.players.map(p => {
+      const ts = D.tips.filter(t => t.player === p.id && byMatch.get(t.match).odds);
+      let q = 0, favs = 0, under = 0, underHit = 0, hits = 0;
+      for (const t of ts) {
+        const o = byMatch.get(t.match).odds, k = outcome(t.tip);
+        q += o[k];
+        if (o[k] === Math.min(o.h, o.d, o.a)) favs++;
+        if (o[k] >= 3.5) { under++; if (t.points) underHit++; }
+        if (t.points) hits++;
+      }
+      const n = ts.length || 1;
+      return { name: p.name, n: ts.length, q: q / n, favs: favs / n, under, underHit };
+    }).filter(r => r.n).sort((a, b) => b.q - a.q);
+    const pcard = $('div', 'card', '<h2>Mut zum Risiko</h2>');
+    const t2 = $('table');
+    t2.innerHTML = '<tr><th>Spieler</th><th>Tipps</th><th>Ø Quote des Tipps</th><th>Favorit getippt</th><th>Tipps auf Quote ≥ 3,5</th><th>davon gepunktet</th></tr>' +
+      rows.map(r => `<tr><td>${r.name}</td><td>${r.n}</td><td>${r.q.toFixed(2)}</td><td>${pc(r.favs)}</td><td>${r.under}</td><td>${r.underHit}</td></tr>`).join('');
+    pcard.append(t2, $('p', 'note', 'Sortiert nach Ø Quote des getippten Ausgangs (Heim/Remis/Gast): hoch = risikofreudiger Tipper.'));
+    root.append(mcard, pcard);
+    return root;
+  }
+};
+
+// Tabellenspitze im Kopfband
+function leaders() {
+  if (!playedDays.length) return;
+  const { cum, cmp, order } = standings(), tot = id => cum.get(id).at(-1);
+  const sorted = order(), lead = tot(sorted[0].id);
+  const rows = sorted.slice(0, 3).map(p => {
+    const pos = 1 + sorted.filter(q => cmp()(q, p) < 0).length, gap = lead - tot(p.id);
+    return `<li><span class="pos">${pos}</span><span class="nm">${p.name}</span><span class="pt">${tot(p.id)}</span><span class="gap">${gap ? '−' + gap : ''}</span></li>`;
+  }).join('');
+  document.getElementById('leaders').innerHTML = `<span class="cap" id="lt">Tabelle nach dem ${playedDays.at(-1)}. Spieltag</span><ol class="table-top" aria-labelledby="lt">${rows}</ol>`;
+}
+
+async function main() {
+  prepare(await (await fetch('data.json')).json());
+  document.getElementById('title').textContent = D.title;
+  const stand = new Date(D.fetchedAt).toLocaleString('de-DE', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  document.getElementById('meta').textContent = `${D.players.length} Spieler, ${finished.length} gespielte Spiele. Stand: ${stand} Uhr`;
+  leaders();
+  initFocus(standings().order());
+  const css = getComputedStyle(document.documentElement);
+  Object.assign(Chart.defaults, { color: css.getPropertyValue('--muted').trim(), borderColor: css.getPropertyValue('--line-soft').trim() });
+  Chart.defaults.font.family = css.getPropertyValue('--body').trim();
+  Chart.defaults.font.size = 13;
+  Chart.defaults.plugins.tooltip.padding = 10;
+  const nav = document.getElementById('tabs'), view = document.getElementById('view');
+  const header = document.querySelector('.pitch');
+  const stick = () => header.style.top = (nav.offsetHeight - header.offsetHeight) + 'px';
+  addEventListener('resize', stick); stick();
+  const show = name => {
+    nav.querySelectorAll('button').forEach(b => { const on = b.textContent === name; b.setAttribute('aria-selected', on); if (on) nav.scrollTo({ left: b.offsetLeft - (nav.clientWidth - b.offsetWidth) / 2 }); });
+    view.replaceChildren(views[name]()); location.hash = name;
+    if (scrollY > header.offsetHeight - nav.offsetHeight) scrollTo(0, header.offsetHeight - nav.offsetHeight);
+  };
+  Object.keys(views).forEach(n => { const b = $('button', null, n); b.role = 'tab'; b.onclick = () => show(n); nav.append(b); });
+  show(decodeURIComponent(location.hash.slice(1)) in views ? decodeURIComponent(location.hash.slice(1)) : 'Verlauf');
+  if (playedDays.length) newsModal(() => show('News'));
+}
+
+// Meldungen des aktuellen Spieltags bei jedem Seitenaufruf, eine nach der anderen
+function newsModal(toTab) {
+  const d = playedDays.at(-1), { done, items } = news(d, standings());
+  const dlg = $('dialog', 'news'), head = $('div', 'nm-head', `<b>Tipp-Rundschau</b><span>${d}. Spieltag${done ? '' : ' · vorläufig'}</span>`);
+  const x = $('button', 'x', '×'), body = $('div', 'nm-body'), foot = $('div', 'nm-foot'), dots = $('div', 'nm-dots');
+  const all = $('button', 'all', 'Alle Meldungen'), go = $('button', 'go');
+  x.setAttribute('aria-label', 'Schließen'); dlg.setAttribute('aria-label', 'Tipp-Rundschau');
+  body.setAttribute('aria-live', 'polite');
+  head.append(x); foot.append(dots, all, go); dlg.append(head, body, foot);
+  let k = 0;
+  const draw = () => {
+    const s = items[k];
+    body.className = 'nm-body ' + s.tone; void body.offsetWidth; body.classList.add('in');      // Animation neu starten
+    body.innerHTML = `<span class="ic" aria-hidden="true">${s.icon}</span><span class="kicker">${s.kicker}</span><h3>${s.head}</h3><p>${s.text}</p>`;
+    dots.innerHTML = items.map((_, j) => `<i class="${j === k ? 'on' : ''}"></i>`).join('');
+    dots.setAttribute('aria-label', `Meldung ${k + 1} von ${items.length}`);
+    go.textContent = k < items.length - 1 ? 'Nächste Meldung →' : 'Zur Auswertung';
+  };
+  go.onclick = () => { if (++k < items.length) draw(); else dlg.close(); };
+  x.onclick = () => dlg.close();
+  all.onclick = () => { dlg.close(); toTab(); };
+  dlg.onclick = e => { if (e.target === dlg) dlg.close(); };      // Klick auf den Hintergrund
+  dlg.onclose = () => dlg.remove();
+  draw(); document.body.append(dlg); dlg.showModal(); go.focus();
+}
+main().catch(e => { document.getElementById('view').textContent = 'Fehler: ' + e.message + ' (data.json fehlt? `node export/export.mjs` ausführen und über einen lokalen Server öffnen)'; });
+</script>
+</body>
+</html>

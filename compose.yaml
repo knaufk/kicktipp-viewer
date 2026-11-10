@@ -1,0 +1,14 @@
+# Beispiel: docker compose up -d  (vorher .env aus .env.example anlegen)
+services:
+  kicktipp:
+    build: .
+    # image: ghcr.io/knaufk/kicktipp-viewer:latest
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - kicktipp-data:/data
+
+volumes:
+  kicktipp-data:
