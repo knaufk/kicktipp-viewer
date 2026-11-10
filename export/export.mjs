@@ -1,7 +1,7 @@
 // Liest die öffentliche Tippübersicht der Kicktipp-Runde und schreibt data.json ins Datenverzeichnis.
 // Aufruf: node export/export.mjs [slug]   (sonst KICKTIPP_SLUG)
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { DATA_DIR, DATA_FILE, ODDS_FILE, slug } from './config.mjs';
+import { DATA_DIR, DATA_FILE, ODDS_FILE, USER_AGENT, pause, slug } from './config.mjs';
 
 const SLUG = slug();
 const BASE = `https://www.kicktipp.de/${SLUG}`;
@@ -9,7 +9,8 @@ const BASE = `https://www.kicktipp.de/${SLUG}`;
 const decode = s => s.replace(/&amp;/g, '&').replace(/&nbsp;/g, ' ').replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n)).trim();
 const text = s => decode(s.replace(/<[^>]+>/g, ''));
 const get = async url => {
-  const res = await fetch(url);
+  await pause();
+  const res = await fetch(url, { headers: { 'user-agent': USER_AGENT } });
   if (!res.ok) throw new Error(`${res.status} ${url}`);
   return res.text();
 };

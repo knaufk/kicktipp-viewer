@@ -14,7 +14,7 @@ const PORT = Number(process.env.PORT ?? 8080);
 const ODDS_HOUR = Number(process.env.ODDS_HOUR ?? 6);
 const CHECK_MINUTES = 15;
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url));
-const TYPES = { '.html': 'text/html; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.js': 'text/javascript', '.css': 'text/css' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8' };
 const log = msg => console.error(`${new Date().toISOString()} ${msg}`);
 
 // Optionale Basic Auth (sonst z. B. im vorgeschalteten Reverse Proxy)

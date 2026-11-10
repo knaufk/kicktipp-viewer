@@ -18,3 +18,7 @@ export function slug() {
 }
 
 export const hasLogin = () => Boolean(process.env.KICKTIPP_EMAIL && process.env.KICKTIPP_PASSWORD);
+
+// Höflich zu Kicktipp: erkennbarer User-Agent und kurze Pause vor jeder Anfrage
+export const USER_AGENT = 'kicktipp-viewer (+https://github.com/knaufk/kicktipp-viewer)';
+export const pause = () => new Promise(r => setTimeout(r, 500));

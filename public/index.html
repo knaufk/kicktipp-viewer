@@ -6,10 +6,13 @@
 <title>Kicktipp Viewer</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <meta name="theme-color" content="#0f4a30">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Big+Shoulders+Display:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
+/* Schriften lokal (vendor/fonts, SIL Open Font License), damit keine Anfragen an Google gehen */
+@font-face{font-family:'Barlow';font-style:normal;font-weight:400;font-display:swap;src:url(vendor/fonts/barlow-400.woff2) format('woff2')}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:500;font-display:swap;src:url(vendor/fonts/barlow-500.woff2) format('woff2')}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:600;font-display:swap;src:url(vendor/fonts/barlow-600.woff2) format('woff2')}
+@font-face{font-family:'Barlow';font-style:normal;font-weight:700;font-display:swap;src:url(vendor/fonts/barlow-700.woff2) format('woff2')}
+@font-face{font-family:'Big Shoulders Display';font-style:normal;font-weight:600 800;font-display:swap;src:url(vendor/fonts/big-shoulders-display.woff2) format('woff2')}
 /* Rasen, Kreide, Meisterschale (Gelb = Sieg), Rote Karte (Rot = Verlust) */
 :root{
   --turf:#0f4a30;--turf-2:#135a3b;--chalk:#f3f7f1;
@@ -226,7 +229,7 @@ dialog.news::backdrop{background:rgba(8,20,14,.55);backdrop-filter:blur(2px)}
 </header>
 <main id="view" class="wrap"></main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="vendor/chart.umd.min.js"></script>
 <script>
 const sign = ([h, a]) => Math.sign(h - a);
 const $ = (t, c, h) => { const e = document.createElement(t); if (c) e.className = c; if (h != null) e.innerHTML = h; return e; };

@@ -6,7 +6,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 import { parseOdds } from './odds-parse.mjs';
 import { kickoffDate } from './time.mjs';
-import { DATA_DIR, DATA_FILE, ODDS_FILE, slug } from './config.mjs';
+import { DATA_DIR, DATA_FILE, ODDS_FILE, USER_AGENT, pause, slug } from './config.mjs';
 
 const SLUG = slug();
 const BASE = `https://www.kicktipp.de/${SLUG}`;
@@ -26,14 +26,15 @@ const jar = new Map();
 const cookie = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
 const store = res => res.headers.getSetCookie().forEach(c => { const [kv] = c.split(';'); const i = kv.indexOf('='); jar.set(kv.slice(0, i), kv.slice(i + 1)); });
 const get = async url => {
-  const res = await fetch(url, { headers: { cookie: cookie() }, redirect: 'manual' });
+  await pause();
+  const res = await fetch(url, { headers: { cookie: cookie(), 'user-agent': USER_AGENT }, redirect: 'manual' });
   store(res);
   return res;
 };
 
 const login = await fetch(`${BASE}/profil/loginaction`, {
   method: 'POST', redirect: 'manual',
-  headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: cookie() },
+  headers: { 'content-type': 'application/x-www-form-urlencoded', cookie: cookie(), 'user-agent': USER_AGENT },
   body: new URLSearchParams({ kennung: email, passwort: password }),
 });
 store(login);
