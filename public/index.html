@@ -236,7 +236,7 @@ const stack = t => {
   [...t.rows].slice(1).forEach(r => [...r.cells].forEach((c, i) => c.dataset.l = head[i]));
   t.classList.add('stack'); return t;
 };
-const pcls = p => p == null ? '' : p >= 4 ? 'p4' : p === 3 ? 'p3' : p >= 1 ? 'p2' : 'p0';
+const pcls = c => ({ exact: 'p4', diff: 'p3', tend: 'p2', miss: 'p0' })[c] ?? '';
 const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 // Gängige Vereinskürzel; unbekannte Teams fallen auf die ersten drei Buchstaben zurück
 const TEAM_ABBR = {
@@ -323,10 +323,19 @@ function lineChart({ labels, series, ref, yTitle, reverse, min, max, fmt = v => 
   return box;
 }
 
-let D, byMatch, byPlayer, tipOf, finished, days, playedDays, botTips;
+let D, byMatch, byPlayer, tipOf, finished, days, playedDays, botTips, hasOdds, PTS;
 
-// Kicktipp-Wertung: 4 exakt, 3 richtige Tordifferenz (außer Remis), 2 richtige Tendenz
-const pointsFor = (tip, res) => tip[0] === res[0] && tip[1] === res[1] ? 4 : sign(tip) !== sign(res) ? 0 : sign(tip) && tip[0] - tip[1] === res[0] - res[1] ? 3 : 2;
+// Kategorie eines Tipps: exakt, richtige Tordifferenz (außer Remis), richtige Tendenz, daneben; null ohne Ergebnis
+const cat = (tip, res) => !res ? null : tip[0] === res[0] && tip[1] === res[1] ? 'exact' : sign(tip) !== sign(res) ? 'miss'
+  : sign(tip) && tip[0] - tip[1] === res[0] - res[1] ? 'diff' : 'tend';
+// Punkte je Kategorie aus der Runde ablesen (häufigster Wert), sonst Kicktipp-Standard 4/3/2/0
+function pointsTable() {
+  const seen = {};
+  for (const t of D.tips) if (t.cat && t.points != null) ((seen[t.cat] ||= {})[t.points] = (seen[t.cat][t.points] || 0) + 1);
+  const mode = (c, def) => seen[c] ? +Object.entries(seen[c]).sort((a, b) => b[1] - a[1])[0][0] : def;
+  return { exact: mode('exact', 4), diff: mode('diff', 3), tend: mode('tend', 2), miss: mode('miss', 0) };
+}
+const pointsFor = (tip, res) => PTS[cat(tip, res)];
 // Quotenbot als Referenz (kein Spieler, zählt nirgends mit): tippt den Favoriten mit 2:1, 1:1 bzw. 1:2
 const BOT = 'Quotenbot';
 function quotenbot() {
@@ -335,7 +344,7 @@ function quotenbot() {
     if (!m.odds) continue;
     const { h, d, a } = m.odds, min = Math.min(h, d, a);
     const tip = h === min ? [2, 1] : a === min ? [1, 2] : [1, 1];      // gleiche Quote: Heim vor Gast vor Remis
-    tips.set(m.id, { tip, points: m.result ? pointsFor(tip, m.result) : null });
+    tips.set(m.id, { tip, cat: cat(tip, m.result), points: m.result ? pointsFor(tip, m.result) : null });
   }
   return tips;
 }
@@ -348,7 +357,10 @@ function prepare(d) {
   finished = d.matches.filter(m => m.result);
   days = [...new Set(d.matches.map(m => m.matchday))];
   playedDays = [...new Set(finished.map(m => m.matchday))];
+  d.tips.forEach(t => t.cat = cat(t.tip, byMatch.get(t.match).result));
+  PTS = pointsTable();
   botTips = quotenbot();
+  hasOdds = botTips.size > 0;
 }
 
 // Punkte je Spieler und Spieltag, kumuliert, Tagessiege, Rang (bei Punktgleichheit entscheiden die Tagessiege)
@@ -398,7 +410,7 @@ function news(d, sc) {
   // Spieltagssieg (Rekord, Serie)
   const order = [...P].sort((a, c) => pts(c) - pts(a)), top = pts(order[0]);
   const winners = P.filter(id => pts(id) === top), runner = order.find(id => pts(id) < top);
-  const exactN = id => ms.filter(m => tipOf.get(id + ':' + m.id)?.points === 4).length;
+  const exactN = id => ms.filter(m => tipOf.get(id + ':' + m.id)?.cat === 'exact').length;
   const best = i ? Math.max(...P.flatMap(id => sc.per.get(id).slice(0, i))) : Infinity;
   if (top > 0) {
     const rec = top > best, one = winners.length === 1, w = winners[0];
@@ -453,7 +465,7 @@ function news(d, sc) {
   // Spiele: Totalausfall, einzig richtiger Tipp, einziger Volltreffer
   for (const m of ms) {
     const ts = P.map(id => tipOf.get(id + ':' + m.id)).filter(Boolean);
-    const hit = ts.filter(t => t.points > 0), exact = ts.filter(t => t.points === 4), q = qOf(m);
+    const hit = ts.filter(t => t.points > 0), exact = ts.filter(t => t.cat === 'exact'), q = qOf(m);
     const bonus = q ? Math.min(q, 8) * 2 : 0, qt = q ? ` (Quote ${q2(q)})` : '';
     if (ts.length && !hit.length) {
       const bot = botTips.get(m.id);
@@ -543,7 +555,7 @@ function news(d, sc) {
   // Quotenbot in der virtuellen Gesamttabelle (Platz wie im Tabellenverlauf)
   const botCum = j => finished.filter(m => playedDays.indexOf(m.matchday) <= j).reduce((s, m) => s + (botTips.get(m.id)?.points || 0), 0);
   const botRank = j => 1 + P.filter(id => cumAt(id, j) >= botCum(j)).length;
-  if (i && done) {
+  if (hasOdds && i && done) {
     const br = botRank(i), prev = botRank(i - 1);
     if (br === 1 && prev > 1) add(64, BOT, '🤖', `Der ${BOT} wäre Tabellenführer`, `Mit ${pld(botCum(i))} läge der sture Favoriten-Tipper vor allen – ${b(lead)} hat ${pl(cumAt(lead, i))}.`, 'red');
     else if (br <= 3 && prev > 3) add(44, BOT, '🤖', `Der ${BOT} klettert aufs virtuelle Podium`, `Mit ${pld(botCum(i))} läge er jetzt auf Platz ${br} der Gesamtwertung – ganz ohne nachzudenken.`);
@@ -558,9 +570,9 @@ function news(d, sc) {
       add(46, 'Spiel', '🏦', `Sichere Bank geplatzt: ${m.home} – ${m.away} ${res(m)}`,
         `Quote ${q2(fav)} auf ${favSign === 1 ? m.home : m.away} – und trotzdem kein Sieg. ${on} von ${ts.length} Tippern hatten auf den Favoriten gesetzt.`, 'red');
     }
-    const ex = ts.filter(t => t.points === 4);
+    const ex = ts.filter(t => t.cat === 'exact');
     if (ex.length >= 7) add(40, 'Volltreffer', '🎯', `Kollektiver Volltreffer: ${ex.length} Tipper treffen das ${res(m)}`,
-      `Bei ${m.home} – ${m.away} lagen ${ex.length} von ${ts.length} exakt richtig. Nicht dabei: ${and(ts.filter(t => t.points < 4).map(t => b(t.player))) || 'niemand'}.`);
+      `Bei ${m.home} – ${m.away} lagen ${ex.length} von ${ts.length} exakt richtig. Nicht dabei: ${and(ts.filter(t => t.cat !== 'exact').map(t => b(t.player))) || 'niemand'}.`);
   }
 
   // Ausreißer-Tipps: Torflut (ab 8 Toren) und Remis-Festival (ab 5 Remis an einem Spieltag)
@@ -616,14 +628,15 @@ const views = {
     // Quotenbot: kumulierte Punkte und Platz, den er bei Punktgleichheit hinter den Spielern hätte
     const botCum = playedDays.reduce((a, d, i) => (a.push((a[i - 1] || 0) + finished.filter(m => m.matchday === d).reduce((s, m) => s + (botTips.get(m.id)?.points || 0), 0)), a), []);
     const botRank = botCum.map((v, i) => 1 + D.players.filter(p => cum.get(p.id)[i] >= v).length);
+    const ref = data => hasOdds ? { name: BOT, data } : null;
     const draw = () => {
       const isRank = mode.value === 'rank';
       slot.replaceChildren(isRank
-        ? lineChart({ labels: playedDays.map(d => d + '.'), series: series(rank), ref: { name: BOT, data: botRank }, yTitle: 'Platz', reverse: true, min: 1, max: D.players.length + 1, fmt: v => v + '.', sortAsc: true })
-        : lineChart({ labels: playedDays.map(d => d + '.'), series: series(cum), ref: { name: BOT, data: botCum }, yTitle: 'Punkte', fmt: v => v + ' Pkt' }));
+        ? lineChart({ labels: playedDays.map(d => d + '.'), series: series(rank), ref: ref(botRank), yTitle: 'Platz', reverse: true, min: 1, max: D.players.length + 1, fmt: v => v + '.', sortAsc: true })
+        : lineChart({ labels: playedDays.map(d => d + '.'), series: series(cum), ref: ref(botCum), yTitle: 'Punkte', fmt: v => v + ' Pkt' }));
     };
     mode.onchange = draw; draw();
-    card.append($('p', 'note', `Gestrichelt: ${BOT} als Referenz (tippt immer den Quotenfavoriten, zählt nicht zur Wertung). Sein Platz ist der, den er hätte, ohne die Plätze der Spieler zu verschieben.`));
+    if (hasOdds) card.append($('p', 'note', `Gestrichelt: ${BOT} als Referenz (tippt immer den Quotenfavoriten, zählt nicht zur Wertung). Sein Platz ist der, den er hätte, ohne die Plätze der Spieler zu verschieben.`));
     return root;
   },
 
@@ -649,12 +662,14 @@ const views = {
     const botTotal = botDays.reduce((a, b) => a + b, 0);
     let botDone = false;
     const addBot = () => { const tr = row(BOT, botDays, botTotal, '–'); tr.className = 'bot'; tr.title = 'Tippt immer den Quotenfavoriten: Heimsieg 2:1, Remis 1:1, Auswärtssieg 1:2'; t.append(tr); botDone = true; };
+    if (!hasOdds) botDone = true;
     order().forEach(p => {
       if (!botDone && botTotal > cum.get(p.id).at(-1)) addBot();
       t.append(row(p.name, per.get(p.id), cum.get(p.id).at(-1), wins.get(p.id).at(-1)));
     });
     if (!botDone) addBot();
-    card.append(t, $('p', 'note', `${BOT} (Referenz, zählt nicht zur Wertung): tippt immer den Quotenfavoriten – Heimsieg 2:1, Remis 1:1, Auswärtssieg 1:2. Spiele ohne Quote tippt er nicht.`));
+    card.append(t);
+    if (hasOdds) card.append($('p', 'note', `${BOT} (Referenz, zählt nicht zur Wertung): tippt immer den Quotenfavoriten – Heimsieg 2:1, Remis 1:1, Auswärtssieg 1:2. Spiele ohne Quote tippt er nicht.`));
     return card;
   },
 
@@ -670,11 +685,12 @@ const views = {
       t.innerHTML = '<tr><th>Spieler</th>' + ms.map(m => `<th title="${m.home} – ${m.away}">${abbr(m.home)}–${abbr(m.away)}<br>${m.result ? m.result.join(':') : '–:–'}</th>`).join('') + '<th>Σ</th></tr>';
       D.players.forEach(p => {
         let sum = 0; const tr = $('tr', null, `<td>${p.name}</td>`);
-        ms.forEach(m => { const x = tipOf.get(p.id + ':' + m.id); const td = $('td', x ? pcls(x.points) : 'miss', x ? x.tip.join(':') + (x.points ? `<sub> ${x.points}</sub>` : '') : '–'); sum += x?.points || 0; tr.append(td); });
+        ms.forEach(m => { const x = tipOf.get(p.id + ':' + m.id); const td = $('td', x ? pcls(x.cat) : 'miss', x ? x.tip.join(':') + (x.points ? `<sub> ${x.points}</sub>` : '') : '–'); sum += x?.points || 0; tr.append(td); });
         tr.append($('td', null, `<b>${sum}</b>`)); t.append(tr);
       });
+      if (!hasOdds) return card.replaceChildren(t);
       let botSum = 0; const btr = $('tr', 'bot', `<td>${BOT}</td>`);
-      ms.forEach(m => { const x = botTips.get(m.id); btr.append($('td', x ? pcls(x.points) : 'miss', x ? x.tip.join(':') + (x.points ? `<sub> ${x.points}</sub>` : '') : '–')); botSum += x?.points || 0; });
+      ms.forEach(m => { const x = botTips.get(m.id); btr.append($('td', x ? pcls(x.cat) : 'miss', x ? x.tip.join(':') + (x.points ? `<sub> ${x.points}</sub>` : '') : '–')); botSum += x?.points || 0; });
       btr.append($('td', null, `<b>${botSum}</b>`)); t.append(btr);
       card.replaceChildren(t);
     };
@@ -688,7 +704,7 @@ const views = {
       for (const t of ts) {
         const m = byMatch.get(t.match);
         if (t.tip[0] === m.result[0] && t.tip[1] === m.result[1]) exact++;
-        if (t.points === 3) diff++;
+        if (t.cat === 'diff') diff++;
         if (sign(t.tip) === sign(m.result)) tend++;
         gH += t.tip[0]; gA += t.tip[1]; points += t.points || 0;
         if (sign(t.tip) === 0) draws++;
@@ -724,7 +740,7 @@ const views = {
       const r = recsOf(id), n = r.length || 1, share = f => r.filter(f).length / n, mean = f => r.reduce((s, x) => s + f(x), 0) / n;
       const wo = r.filter(x => x.m.odds);
       return { n: r.length, ppt: mean(x => x.t.points || 0),
-        exact: share(x => x.t.points === 4), diff: share(x => x.t.points === 3), tend: share(x => sign(x.t.tip) === sign(x.m.result)),
+        exact: share(x => x.t.cat === 'exact'), diff: share(x => x.t.cat === 'diff'), tend: share(x => sign(x.t.tip) === sign(x.m.result)),
         home: share(x => sign(x.t.tip) === 1), draw: share(x => sign(x.t.tip) === 0), away: share(x => sign(x.t.tip) === -1),
         goals: mean(x => x.t.tip[0] + x.t.tip[1]), contra: share(x => !major.get(x.m.id).includes(sign(x.t.tip))),
         odds: wo.length ? wo.reduce((s, x) => s + x.m.odds['hda'[1 - sign(x.t.tip)]], 0) / wo.length : null };
@@ -755,7 +771,7 @@ const views = {
       kpis.innerHTML = [
         [pos + '.', `Platz · ${tot(id)} Punkte`],
         [dec(s.ppt), `Ø Punkte pro Tipp (Runde: ${dec(avgPpt)})`],
-        [r.filter(x => x.t.points === 4).length, 'Volltreffer (exaktes Ergebnis)'],
+        [r.filter(x => x.t.cat === 'exact').length, 'Volltreffer (exaktes Ergebnis)'],
         [pc(s.tend), 'richtige Tendenz'],
         [s.n, missed ? `Tipps abgegeben, ${missed} verpasst` : 'Tipps abgegeben, keiner verpasst'],
         [pc(s.contra), 'gegen die Mehrheit getippt']
@@ -779,7 +795,7 @@ const views = {
       const rankOf = k => 1 + active.filter(p => all.get(p.id)[k] > s[k]).length;
       const avgOf = k => { const v = active.map(p => all.get(p.id)[k]).filter(v => v != null); return v.reduce((a, b) => a + b, 0) / (v.length || 1); };
       const rows = [
-        ['Ø Punkte pro Tipp', 'ppt', dec], ['Exakt (4 Pkt)', 'exact', pc], ['Differenz (3 Pkt)', 'diff', pc], ['Richtige Tendenz', 'tend', pc],
+        ['Ø Punkte pro Tipp', 'ppt', dec], [`Exakt (${PTS.exact} Pkt)`, 'exact', pc], [`Differenz (${PTS.diff} Pkt)`, 'diff', pc], ['Richtige Tendenz', 'tend', pc],
         ['Heimsieg getippt', 'home', pc, actual.home], ['Remis getippt', 'draw', pc, actual.draw], ['Auswärtssieg getippt', 'away', pc, actual.away],
         ['Ø Tore getippt', 'goals', dec, actual.goals], ['Gegen die Mehrheit', 'contra', pc]
       ];
@@ -791,13 +807,13 @@ const views = {
 
       // Punkteverteilung
       const dcard = $('div', 'card', '<h2>Punkteverteilung</h2>');
-      const cnt = [4, 3, 2, 0].map(p => [p, r.filter(x => (x.t.points || 0) === p).length]);
-      const lab = { 4: 'Exakt', 3: 'Differenz', 2: 'Tendenz', 0: 'Daneben' };
-      dcard.append($('div', 'dist', cnt.filter(([, n]) => n).map(([p, n]) => `<span class="${pcls(p)}" style="flex:${n}" title="${lab[p]}: ${n}">${n}</span>`).join('')),
-        $('div', 'legend', cnt.map(([p, n]) => `<span><i class="${pcls(p)}"></i>${lab[p]} (${p} Pkt): ${n} · ${pc(n / (s.n || 1))}</span>`).join('')));
+      const cnt = ['exact', 'diff', 'tend', 'miss'].map(c => [c, r.filter(x => x.t.cat === c).length]);
+      const lab = { exact: 'Exakt', diff: 'Differenz', tend: 'Tendenz', miss: 'Daneben' };
+      dcard.append($('div', 'dist', cnt.filter(([, n]) => n).map(([c, n]) => `<span class="${pcls(c)}" style="flex:${n}" title="${lab[c]}: ${n}">${n}</span>`).join('')),
+        $('div', 'legend', cnt.map(([c, n]) => `<span><i class="${pcls(c)}"></i>${lab[c]} (${PTS[c]} Pkt): ${n} · ${pc(n / (s.n || 1))}</span>`).join('')));
 
       // Lieblingsergebnisse
-      const fav = {}; r.forEach(x => { const k = x.t.tip.join(':'); (fav[k] ||= { n: 0, hit: 0 }).n++; if (x.t.points === 4) fav[k].hit++; });
+      const fav = {}; r.forEach(x => { const k = x.t.tip.join(':'); (fav[k] ||= { n: 0, hit: 0 }).n++; if (x.t.cat === 'exact') fav[k].hit++; });
       const real = {}; finished.forEach(m => { const k = m.result.join(':'); real[k] = (real[k] || 0) + 1; });
       dcard.append($('h2', null, 'Lieblingsergebnisse'));
       dcard.lastChild.style.marginTop = '24px';
@@ -1069,7 +1085,7 @@ const views = {
     const withOdds = D.matches.filter(m => m.odds);
     const root = $('div');
     if (!withOdds.length) {
-      root.append($('div', 'card', '<h2>Wettquoten</h2><p class="note">Noch keine Quoten in data.json. <code>export/odds.json</code> mit <code>export/odds-snippet.js</code> erzeugen und den Export erneut ausführen.</p>'));
+      root.append($('div', 'card', '<h2>Wettquoten</h2><p class="note">Noch keine Quoten in data.json. Dafür <code>KICKTIPP_EMAIL</code> und <code>KICKTIPP_PASSWORD</code> setzen.</p>'));
       return root;
     }
     const outcome = t => ['h', 'd', 'a'][1 - sign(t)];       // sign 1 = Heimsieg
@@ -1152,8 +1168,10 @@ async function main() {
     view.replaceChildren(views[name]()); location.hash = name;
     if (scrollY > header.offsetHeight - nav.offsetHeight) scrollTo(0, header.offsetHeight - nav.offsetHeight);
   };
-  Object.keys(views).forEach(n => { const b = $('button', null, n); b.role = 'tab'; b.onclick = () => show(n); nav.append(b); });
-  show(decodeURIComponent(location.hash.slice(1)) in views ? decodeURIComponent(location.hash.slice(1)) : 'Verlauf');
+  const names = Object.keys(views).filter(n => hasOdds || !['Wettgewinn', 'Quoten'].includes(n));
+  names.forEach(n => { const b = $('button', null, n); b.role = 'tab'; b.onclick = () => show(n); nav.append(b); });
+  const hash = decodeURIComponent(location.hash.slice(1));
+  show(names.includes(hash) ? hash : 'Verlauf');
   if (playedDays.length) newsModal(() => show('News'));
 }
 
@@ -1182,7 +1200,7 @@ function newsModal(toTab) {
   dlg.onclose = () => dlg.remove();
   draw(); document.body.append(dlg); dlg.showModal(); go.focus();
 }
-main().catch(e => { document.getElementById('view').textContent = 'Fehler: ' + e.message + ' (data.json fehlt? `node export/export.mjs` ausführen und über einen lokalen Server öffnen)'; });
+main().catch(e => { document.getElementById('view').textContent = 'Fehler: ' + e.message + ' (data.json fehlt? Erste Aktualisierung abwarten bzw. `node export/export.mjs` ausführen)'; });
 </script>
 </body>
 </html>
