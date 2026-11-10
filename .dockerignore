@@ -3,5 +3,6 @@
 !*.mjs
 !export/
 !public/
+!demo/data.json
 public/data.json
 export/odds.json

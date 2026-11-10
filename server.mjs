@@ -1,5 +1,6 @@
 // Liefert die Seite aus (public/ + data.json aus dem Datenverzeichnis) und aktualisiert die Daten selbst:
 // beim Start einmal komplett, danach alle 15 Minuten nach Bedarf, täglich ab ODDS_HOUR (Berliner Zeit) komplett.
+// Mit DEMO=true: erfundene Beispieldaten aus demo/data.json, keine Aktualisierung.
 // Aufruf: node server.mjs [--no-update]
 import './export/time.mjs';
 import { spawn } from 'node:child_process';
@@ -14,6 +15,8 @@ const PORT = Number(process.env.PORT ?? 8080);
 const ODDS_HOUR = Number(process.env.ODDS_HOUR ?? 6);
 const CHECK_MINUTES = 15;
 const PUBLIC = fileURLToPath(new URL('./public/', import.meta.url));
+const DEMO = ['1', 'true'].includes(process.env.DEMO);
+const DATA = DEMO ? fileURLToPath(new URL('./demo/data.json', import.meta.url)) : DATA_FILE;
 const TYPES = { '.html': 'text/html; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml', '.js': 'text/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.txt': 'text/plain; charset=utf-8', '.md': 'text/markdown; charset=utf-8' };
 const log = msg => console.error(`${new Date().toISOString()} ${msg}`);
 
@@ -35,8 +38,8 @@ const server = createServer(async (req, res) => {
   if (!['GET', 'HEAD'].includes(req.method)) return res.writeHead(405).end();
   if (!authorized(req)) return res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="Kicktipp Viewer"' }).end();
 
-  const file = path === '/data.json' ? DATA_FILE : join(PUBLIC, normalize(path === '/' ? '/index.html' : path));
-  if (!file.startsWith(PUBLIC) && file !== DATA_FILE) return res.writeHead(404).end();
+  const file = path === '/data.json' ? DATA : join(PUBLIC, normalize(path === '/' ? '/index.html' : path));
+  if (!file.startsWith(PUBLIC) && file !== DATA) return res.writeHead(404).end();
   try {
     const body = await readFile(file);
     res.writeHead(200, { 'Content-Type': TYPES[extname(file)] ?? 'application/octet-stream', 'Cache-Control': 'no-cache' });
@@ -45,11 +48,11 @@ const server = createServer(async (req, res) => {
     res.writeHead(e.code === 'ENOENT' || e.code === 'EISDIR' ? 404 : 500).end();
   }
 });
-server.listen(PORT, () => log(`Kicktipp Viewer läuft auf Port ${PORT}`));
+server.listen(PORT, () => log(`Kicktipp Viewer läuft auf Port ${PORT}${DEMO ? ' (Demo-Daten)' : ''}`));
 for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, () => server.close(() => process.exit(0)));
 
 // Aktualisierung: auto-update.mjs als Kindprozess, nie zwei gleichzeitig
-if (!process.argv.includes('--no-update')) {
+if (!DEMO && !process.argv.includes('--no-update')) {
   slug();                                          // ohne Runde gar nicht erst starten
   let running = false, lastDaily = null;
   const today = () => new Date().toLocaleDateString('sv');   // YYYY-MM-DD in Berliner Zeit

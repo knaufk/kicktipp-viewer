@@ -6,6 +6,7 @@ WORKDIR /app
 COPY package.json server.mjs auto-update.mjs update.mjs ./
 COPY export/*.mjs export/odds-snippet.js ./export/
 COPY public/ ./public/
+COPY demo/data.json ./demo/
 RUN mkdir /data && chown node:node /data
 USER node
 VOLUME /data

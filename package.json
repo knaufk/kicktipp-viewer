@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node server.mjs",
     "serve": "node server.mjs --no-update",
-    "update": "node update.mjs"
+    "update": "node update.mjs",
+    "demo": "DEMO=true node server.mjs"
   }
 }
